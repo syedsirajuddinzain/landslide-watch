@@ -1,0 +1,158 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+    --color-pine: #0F2018;
+    --color-forest: #1A3028;
+    --color-sage: #4A7C59;
+    --color-mint: #7FB99A;
+    --color-mist: #C8D8BC;
+    --color-parchment: #F5F0E8;
+  }
+
+  body {
+    background-color: #F5F0E8 !important;
+    color: #0F2018 !important;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter, sans-serif;
+    min-height: 100vh;
+    letter-spacing: -0.012em;
+  }
+
+  * {
+    border-color: #C8D8BC;
+  }
+
+  /* Leaflet theme overrides */
+  .leaflet-container {
+    background: #F5F0E8 !important;
+  }
+  .leaflet-control-zoom a {
+    background: #FFFFFF !important;
+    color: #1A3028 !important;
+    border-color: #C8D8BC !important;
+    border-radius: 8px !important;
+    box-shadow: 0 1px 3px rgba(15, 32, 24, 0.1) !important;
+  }
+  .leaflet-control-attribution {
+    background: rgba(245, 240, 232, 0.9) !important;
+    color: #1A3028 !important;
+    backdrop-filter: blur(8px);
+  }
+  .leaflet-popup-content-wrapper {
+    background: #FFFFFF !important;
+    color: #0F2018 !important;
+    border: 1px solid #C8D8BC !important;
+    border-radius: 14px !important;
+    box-shadow: 0 10px 25px -5px rgba(15, 32, 24, 0.15) !important;
+  }
+  .leaflet-popup-tip {
+    background: #FFFFFF !important;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-2xl border border-[#C8D8BC] p-5 shadow-sm transition-all duration-200 hover:shadow-md hover:border-[#7FB99A];
+  }
+  .card-header {
+    @apply text-xs font-bold text-[#1A3028] uppercase tracking-wider mb-3;
+  }
+  .stat-value {
+    @apply text-2xl font-black text-[#0F2018] tracking-tight;
+  }
+  .stat-label {
+    @apply text-xs text-[#1A3028] font-semibold;
+  }
+  .btn {
+    @apply px-4 py-2 rounded-full font-bold text-sm transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm;
+  }
+  .btn-primary {
+    @apply btn bg-[#4A7C59] text-white hover:bg-[#1A3028] active:scale-[0.98];
+  }
+  .btn-ghost {
+    @apply btn text-[#1A3028] hover:text-[#0F2018] hover:bg-[#C8D8BC]/30 active:scale-[0.98];
+  }
+  .btn-danger {
+    @apply btn bg-[#DC2626] text-white hover:bg-[#B91C1C] active:scale-[0.98];
+  }
+  .input {
+    @apply w-full bg-white border border-[#C8D8BC] rounded-xl px-3.5 py-2 text-sm text-[#0F2018] placeholder-[#7FB99A] focus:outline-none focus:border-[#4A7C59] focus:ring-2 focus:ring-[#7FB99A]/30 transition-all shadow-sm;
+  }
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold tracking-wide;
+  }
+  .badge-low {
+    @apply badge bg-[#C8D8BC]/40 text-[#1A3028] border border-[#7FB99A];
+  }
+  .badge-moderate {
+    @apply badge bg-amber-50 text-amber-800 border border-amber-300;
+  }
+  .badge-high {
+    @apply badge bg-orange-50 text-orange-800 border border-orange-300;
+  }
+  .badge-critical {
+    @apply badge bg-rose-50 text-rose-800 border border-rose-300 animate-pulse;
+  }
+  .badge-demo {
+    @apply badge bg-[#C8D8BC]/30 text-[#4A7C59] border border-[#7FB99A];
+  }
+  .sidebar-item {
+    @apply flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-[#1A3028] hover:text-[#0F2018] hover:bg-[#C8D8BC]/30 transition-all duration-150 cursor-pointer;
+  }
+  .sidebar-item-active {
+    @apply sidebar-item text-[#0F2018] bg-[#C8D8BC]/60 border border-[#4A7C59] font-bold shadow-sm;
+  }
+  .table-row {
+    @apply border-b border-[#C8D8BC]/60 hover:bg-[#C8D8BC]/20 transition-colors text-[#0F2018];
+  }
+  .section-title {
+    @apply text-base font-bold text-[#0F2018] mb-4 tracking-tight;
+  }
+}
+
+@layer utilities {
+  .bg-surface { background-color: #F5F0E8 !important; }
+  .bg-surface-card { background-color: #FFFFFF !important; }
+  .bg-surface-elevated { background-color: #FFFFFF !important; }
+  .border-surface-border { border-color: #C8D8BC !important; }
+  .text-brand-light { color: #4A7C59 !important; }
+  .bg-brand { background-color: #4A7C59 !important; }
+  .bg-brand\/10 { background-color: rgba(74, 124, 89, 0.12) !important; }
+  .bg-brand\/20 { background-color: rgba(74, 124, 89, 0.22) !important; }
+  .border-brand\/30 { border-color: rgba(74, 124, 89, 0.35) !important; }
+  .border-brand\/40 { border-color: rgba(74, 124, 89, 0.45) !important; }
+  .text-risk-low { color: #2D6A4F; }
+  .text-risk-moderate { color: #D97706; }
+  .text-risk-high { color: #EA580C; }
+  .text-risk-critical { color: #DC2626; }
+  .bg-risk-low { background-color: rgba(45, 106, 79, 0.1); }
+  .bg-risk-moderate { background-color: rgba(217, 119, 6, 0.1); }
+  .bg-risk-high { background-color: rgba(234, 88, 12, 0.1); }
+  .bg-risk-critical { background-color: rgba(220, 38, 38, 0.1); }
+  .scrollbar-thin { scrollbar-width: thin; scrollbar-color: #C8D8BC #F5F0E8; }
+}
+
+/* Typography Colors */
+h1, h2, h3, h4, h5, h6, .section-title, .stat-value {
+  color: #0F2018 !important;
+}
+
+.text-white:not(button):not(button *):not(.badge):not(.badge *):not(.btn):not(.btn *):not(.bg-brand):not(.bg-brand *):not(.bg-blue-600):not(.bg-blue-600 *) {
+  color: #0F2018 !important;
+}
+
+.btn-primary, .btn-primary *, .btn-danger, .btn-danger * {
+  color: #FFFFFF !important;
+}
+
+.text-slate-400 { color: #1A3028 !important; }
+.text-slate-300 { color: #1A3028 !important; }
+.text-slate-200 { color: #0F2018 !important; }
+.text-slate-500 { color: #4A7C59 !important; }
+.text-slate-600 { color: #1A3028 !important; }
+.text-slate-700 { color: #0F2018 !important; }
+.text-slate-800 { color: #0F2018 !important; }
+.text-slate-900 { color: #0F2018 !important; }

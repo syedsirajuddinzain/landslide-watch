@@ -1,0 +1,14 @@
+{
+  "name": "landslide-watch-sih26001",
+  "version": "1.0.0",
+  "description": "NER Landslide Risk Assessment Dashboard — Smart India Hackathon 2026",
+  "scripts": {
+    "install:all": "cd backend && npm install && cd ../frontend && npm install",
+    "seed": "cd backend && npx ts-node scripts/seed-locations.ts",
+    "create-admin": "cd backend && npx ts-node scripts/create-admin-user.ts",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:gis": "cd gis-service && python app.py",
+    "test": "cd backend && npm test"
+  }
+}
