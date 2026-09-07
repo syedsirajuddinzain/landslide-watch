@@ -2,7 +2,7 @@
   # 1. Backend REST API (Node.js + Express)
   - type: web
     name: landslide-watch-backend
-    env: node
+    runtime: node
     plan: free
     rootDir: backend
     buildCommand: npm install && npm run build
@@ -20,7 +20,7 @@
   # 2. Frontend React 18 GIS Dashboard
   - type: web
     name: landslide-watch-frontend
-    env: static
+    runtime: static
     plan: free
     rootDir: frontend
     buildCommand: npm install && npm run build
