@@ -3,6 +3,7 @@ import { AuthenticatedRequest } from './auth';
 import { UserRole } from '../types';
 
 const ROLE_HIERARCHY: Record<UserRole, number> = {
+  citizen: 1,
   viewer: 1,
   authority: 2,
   admin: 3,
