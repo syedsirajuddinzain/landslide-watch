@@ -17,18 +17,27 @@ router.get('/', authenticate, async (req: AuthenticatedRequest, res: Response): 
     const snap = await db.collection(COLLECTIONS.LOCATIONS).where('isActive', '==', true).get();
     const locations = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Location[];
 
-    // Fetch latest risk assessment for each location
+    // Fetch latest risk assessment for each location (in-memory sort avoids composite index requirement)
     const withRisk = await Promise.all(
       locations.map(async (loc) => {
         try {
           const riskSnap = await db
             .collection(COLLECTIONS.RISK_ASSESSMENTS)
             .where('locationId', '==', loc.id)
-            .orderBy('timestamp', 'desc')
-            .limit(1)
             .get();
 
-          const latestRisk = riskSnap.empty ? null : riskSnap.docs[0].data();
+          let latestRisk = null;
+          if (!riskSnap.empty) {
+            const risks = riskSnap.docs.map((d) => d.data());
+            risks.sort((a: any, b: any) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
+            latestRisk = risks[0];
+          }
+
+          // If no risk document exists in Firestore, calculate on the fly
+          if (!latestRisk) {
+            latestRisk = await calculateRiskForLocation(loc.id).catch(() => null);
+          }
+
           return { ...loc, latestRisk };
         } catch {
           return { ...loc, latestRisk: null };

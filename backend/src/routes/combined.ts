@@ -185,7 +185,9 @@ analyticsRouter.get('/risk-distribution', authenticate, async (req: Authenticate
     const dist = { LOW: 0, MODERATE: 0, HIGH: 0, CRITICAL: 0 };
 
     await Promise.all(locSnap.docs.map(async (d) => {
-      const rs = await db.collection(COLLECTIONS.RISK_ASSESSMENTS).where('locationId', '==', d.id).orderBy('timestamp', 'desc').limit(1).get();
+      const rs = await db.collection(COLLECTIONS.RISK_ASSESSMENTS).where('locationId', '==', d.id).get();
+      const rDocs = rs.docs.map(x => x.data());
+      rDocs.sort((a: any, b: any) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
       if (!rs.empty) dist[rs.docs[0].data().riskLevel as keyof typeof dist]++;
     }));
 
@@ -232,7 +234,9 @@ analyticsRouter.get('/rainfall-summary', authenticate, async (req: Authenticated
     const db = getDb();
     const locSnap = await db.collection(COLLECTIONS.LOCATIONS).where('isActive', '==', true).get();
     const data = await Promise.all(locSnap.docs.map(async (d) => {
-      const rs = await db.collection(COLLECTIONS.RAINFALL).where('locationId', '==', d.id).orderBy('timestamp', 'desc').limit(1).get();
+      const rs = await db.collection(COLLECTIONS.RAINFALL).where('locationId', '==', d.id).get();
+      const rfDocs = rs.docs.map(x => x.data());
+      rfDocs.sort((a: any, b: any) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
       if (rs.empty) return null;
       const r = rs.docs[0].data();
       return { locationId: d.id, locationName: d.data().name, current_mmph: r.current_mmph, cumulative_24h_mm: r.cumulative_24h_mm, cumulative_72h_mm: r.cumulative_72h_mm, intensity: r.intensity };
@@ -275,10 +279,11 @@ notifRouter.get('/', authenticate, async (req: AuthenticatedRequest, res: Respon
     const db = getDb();
     const snap = await db.collection(COLLECTIONS.NOTIFICATIONS)
       .where('userId', 'in', [req.user!.uid, 'all'])
-      .orderBy('createdAt', 'desc')
-      .limit(50)
       .get();
-    res.json({ success: true, data: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
+    const notifs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    notifs.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    const limited = notifs.slice(0, 50);
+    res.json({ success: true, data: limited });
   } catch (err) {
     res.status(500).json({ success: false, error: 'Failed to fetch notifications' });
   }

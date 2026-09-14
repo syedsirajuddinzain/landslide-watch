@@ -35,9 +35,10 @@ router.get('/active', authenticate, async (req: AuthenticatedRequest, res: Respo
     const snap = await db
       .collection(COLLECTIONS.ALERTS)
       .where('status', 'in', ['NEW', 'ACKNOWLEDGED', 'INVESTIGATING'])
-      .orderBy('createdAt', 'desc')
       .get();
-    res.json({ success: true, data: snap.docs.map((d) => d.data()), total: snap.size });
+    const alerts = snap.docs.map((d) => d.data());
+    alerts.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    res.json({ success: true, data: alerts, total: alerts.length });
   } catch (err) {
     res.status(500).json({ success: false, error: 'Failed to fetch active alerts' });
   }

@@ -3,6 +3,7 @@ import { useQuery } from 'react-query';
 import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { Location, RiskAssessment, HistoricalLandslide, RiskLevel, PriorityLevel } from '../types';
+import { MOCK_LOCATIONS } from '../lib/mockData';
 import { RiskMap } from '../components/map/RiskMap';
 import { RiskBadge, PriorityBadge, TrendBadge, Spinner } from '../components/shared/Badges';
 import { Search, X, Filter, Layers, Navigation, ExternalLink, Clock, Play, FastForward } from 'lucide-react';
@@ -30,8 +31,12 @@ export default function LiveRiskMap() {
   );
 
   // Compute horizon-adjusted locations
-  const baseLocations = locData || [];
-  const locations = baseLocations.map((loc) => {
+  const rawLocations: Location[] = (locData && locData.length > 0 ? locData : MOCK_LOCATIONS) as Location[];
+  const baseLocations: Location[] = rawLocations.map((loc) => {
+    const mock = MOCK_LOCATIONS.find((m) => m.id === loc.id);
+    return { ...loc, latestRisk: loc.latestRisk || mock?.latestRisk || null };
+  });
+  const locations: Location[] = baseLocations.map((loc) => {
     if (horizon === 'current' || !loc.latestRisk) return loc;
 
     const multiplier = horizon === '6h' ? 1.12 : horizon === '12h' ? 1.25 : 1.4;

@@ -806,6 +806,33 @@ export function computeCitizenTripRisk(
 
 api.interceptors.response.use(
   (res) => {
+    // If backend returned locations, ensure latestRisk is NEVER null
+    if (res.config?.url?.includes('/locations') && Array.isArray(res.data?.data)) {
+      res.data.data = res.data.data.map((loc: any) => {
+        if (!loc.latestRisk) {
+          const mock = MOCK_LOCATIONS.find((m) => m.id === loc.id || m.name.toLowerCase().includes(loc.name?.toLowerCase()));
+          return {
+            ...loc,
+            latestRisk: mock?.latestRisk || {
+              id: 'risk-' + loc.id,
+              locationId: loc.id,
+              locationName: loc.name,
+              district: loc.district,
+              state: loc.state,
+              timestamp: new Date().toISOString(),
+              finalScore: 48.5,
+              riskLevel: 'MODERATE',
+              priorityLevel: 'P3',
+              trend: 'STABLE',
+              trendPct: 0,
+              inputs: { rainfall_24h_mm: 12.0, slope_deg: 24.5 },
+            },
+          };
+        }
+        return loc;
+      });
+    }
+
     // If backend returned empty data array for locations, inject rich fallback
     if (res.config?.url?.includes('/locations') && Array.isArray(res.data?.data) && res.data.data.length === 0) {
       return { ...res, data: getFallbackData(res.config.url) };

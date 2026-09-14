@@ -21,10 +21,11 @@ router.get('/latest', authenticate, async (req: AuthenticatedRequest, res: Respo
         const snap = await db
           .collection(COLLECTIONS.RISK_ASSESSMENTS)
           .where('locationId', '==', id)
-          .orderBy('timestamp', 'desc')
-          .limit(1)
           .get();
-        return snap.empty ? null : { locationId: id, ...snap.docs[0].data() };
+        if (snap.empty) return null;
+        const docs = snap.docs.map(d => d.data());
+        docs.sort((a: any, b: any) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
+        return { locationId: id, ...docs[0] };
       })
     );
 
@@ -195,11 +196,11 @@ router.get('/summary/stats', authenticate, async (req: AuthenticatedRequest, res
         const snap = await db
           .collection(COLLECTIONS.RISK_ASSESSMENTS)
           .where('locationId', '==', id)
-          .orderBy('timestamp', 'desc')
-          .limit(1)
           .get();
         if (!snap.empty) {
-          const risk = snap.docs[0].data();
+          const docs = snap.docs.map(d => d.data());
+          docs.sort((a: any, b: any) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
+          const risk = docs[0];
           if (risk.riskLevel in counts) counts[risk.riskLevel as keyof typeof counts]++;
           const pri = risk.priorityLevel || (risk.riskLevel === 'CRITICAL' ? 'P1' : risk.riskLevel === 'HIGH' ? 'P2' : risk.riskLevel === 'MODERATE' ? 'P3' : 'P4');
           if (pri in priorityCounts) priorityCounts[pri as keyof typeof priorityCounts]++;
