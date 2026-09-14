@@ -242,4 +242,56 @@ router.post('/field-verifications', authenticate, async (req: AuthenticatedReque
   }
 });
 
+// GET /api/response/citizen-reports
+router.get('/citizen-reports', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const db = getDb();
+    const snap = await db.collection(COLLECTIONS.CITIZEN_REPORTS).orderBy('createdAt', 'desc').limit(50).get();
+    if (!snap.empty) {
+      const reports = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      res.json({ success: true, data: reports });
+      return;
+    }
+    // Fallback demo reports if collection not seeded
+    res.json({
+      success: true,
+      data: [
+        {
+          id: 'rep-init-01',
+          userName: 'Lalhmingthanga',
+          userPhone: '+91 98623 44102',
+          coordinates: { lat: 23.7385, lon: 92.7145 },
+          locationName: 'Ramhlun South Ridge, Aizawl',
+          nearestCatchmentId: 'aizawl',
+          nearestCatchmentName: 'Aizawl Catchment',
+          distanceToCatchmentKm: 1.1,
+          observationType: 'GROUND_CRACKS',
+          description: 'Fresh 2-inch tension cracks opened across the hillside footpath following yesterday heavy downpour.',
+          photoUrl: 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=600&auto=format&fit=crop&q=80',
+          status: 'SUBMITTED',
+          createdAt: new Date(Date.now() - 38 * 60 * 1000).toISOString(),
+        },
+        {
+          id: 'rep-init-02',
+          userName: 'Kevichüsa',
+          userPhone: '+91 94360 88219',
+          coordinates: { lat: 25.6751, lon: 94.1086 },
+          locationName: 'Sanuorü Bypass Road, Kohima',
+          nearestCatchmentId: 'kohima',
+          nearestCatchmentName: 'Kohima Catchment',
+          distanceToCatchmentKm: 2.4,
+          observationType: 'FALLING_ROCKS',
+          description: 'Boulders and loose shale sliding onto the highway outer lane.',
+          status: 'UNDER_REVIEW',
+          createdAt: new Date(Date.now() - 95 * 60 * 1000).toISOString(),
+        },
+      ],
+    });
+  } catch (err) {
+    logger.error('Failed to fetch citizen reports for response center', { error: err });
+    res.status(500).json({ success: false, error: 'Failed to fetch citizen reports' });
+  }
+});
+
 export default router;
+

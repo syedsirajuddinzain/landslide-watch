@@ -50,4 +50,5 @@ export const COLLECTIONS = {
   INGESTION_JOBS: 'ingestion_jobs',
   AUDIT_LOGS: 'audit_logs',
   SETTINGS: 'settings',
+  CITIZEN_REPORTS: 'citizen_reports',
 } as const;

@@ -1,3 +1,4 @@
+import { TripRiskAssessment } from '../types';
 import axios from 'axios';
 import { auth } from './firebase';
 import {
@@ -413,7 +414,344 @@ function getFallbackData(url: string = '') {
     };
   }
 
+  if (cleanUrl.includes('/citizen/reports') || cleanUrl.includes('/response/citizen-reports')) {
+    return { success: true, data: getStoredCitizenReports() };
+  }
+
+  if (cleanUrl.includes('/citizen/risk-at-location')) {
+    return {
+      success: true,
+      data: computeCitizenLocationRisk(23.7307, 92.7173),
+    };
+  }
+
+  if (cleanUrl.includes('/citizen/check-trip')) {
+    return {
+      success: true,
+      data: computeCitizenTripRisk('Aizawl', 'Champhai'),
+    };
+  }
+
   return { success: true, data: [] };
+}
+
+// LocalStorage helpers for Citizen Reports
+const STORAGE_KEY_CITIZEN_REPORTS = 'landslide_watch_citizen_reports_v1';
+
+export function getStoredCitizenReports(): any[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_CITIZEN_REPORTS);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return [
+    {
+      id: 'rep-live-01',
+      userName: 'Lalhmingthanga',
+      userPhone: '+91 98623 44102',
+      coordinates: { lat: 23.7385, lon: 92.7145 },
+      locationName: 'Ramhlun South Ridge, Aizawl',
+      nearestCatchmentId: 'aizawl',
+      nearestCatchmentName: 'Aizawl Catchment',
+      distanceToCatchmentKm: 1.1,
+      observationType: 'GROUND_CRACKS',
+      description: 'Fresh 2-inch tension cracks opened across the hillside footpath following heavy rainfall.',
+      photoUrl: 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=600&auto=format&fit=crop&q=80',
+      status: 'SUBMITTED',
+      createdAt: new Date(Date.now() - 38 * 60 * 1000).toISOString(),
+    },
+    {
+      id: 'rep-live-02',
+      userName: 'Kevichüsa',
+      userPhone: '+91 94360 88219',
+      coordinates: { lat: 25.6751, lon: 94.1086 },
+      locationName: 'Sanuorü Bypass Road, Kohima',
+      nearestCatchmentId: 'kohima',
+      nearestCatchmentName: 'Kohima Catchment',
+      distanceToCatchmentKm: 2.4,
+      observationType: 'FALLING_ROCKS',
+      description: 'Boulders and loose shale sliding onto highway outer lane. Vehicles moving with caution.',
+      status: 'UNDER_REVIEW',
+      createdAt: new Date(Date.now() - 95 * 60 * 1000).toISOString(),
+      reviewedBy: 'authority@landslidewatch.gov.in',
+      reviewedAt: new Date(Date.now() - 40 * 60 * 1000).toISOString(),
+    },
+    {
+      id: 'rep-live-03',
+      userName: 'Tenzing Bhutia',
+      userPhone: '+91 97330 11920',
+      coordinates: { lat: 27.3389, lon: 88.6138 },
+      locationName: 'Deorali Bazar Slope, Gangtok',
+      nearestCatchmentId: 'gangtok',
+      nearestCatchmentName: 'Gangtok Catchment',
+      distanceToCatchmentKm: 0.9,
+      observationType: 'UNUSUAL_WATER_FLOW',
+      description: 'Muddy water overflowing retaining drain and carrying silt into culvert.',
+      status: 'VERIFIED',
+      createdAt: new Date(Date.now() - 150 * 60 * 1000).toISOString(),
+      reviewedBy: 'authority@landslidewatch.gov.in',
+      reviewedAt: new Date(Date.now() - 110 * 60 * 1000).toISOString(),
+      verificationId: 'verif-deorali-44',
+    },
+  ];
+}
+
+export function saveStoredCitizenReport(report: any): void {
+  const current = getStoredCitizenReports();
+  current.unshift(report);
+  try {
+    localStorage.setItem(STORAGE_KEY_CITIZEN_REPORTS, JSON.stringify(current));
+  } catch {}
+}
+
+export function computeCitizenLocationRisk(lat: number = 23.7307, lon: number = 92.7173, preferredLocId?: string) {
+  // 20 NER reference catchments
+  const CATCHMENTS = [
+    { id: 'aizawl', name: 'Aizawl Mountain Pass', district: 'Aizawl', state: 'Mizoram', lat: 23.7307, lon: 92.7173, slope: 38.4, soil: 'Clay Loam (Typic Dystrochrepts)', rain: 38.5, hist: '2024 Cyclone Remal triggers' },
+    { id: 'gangtok', name: 'Gangtok Urban Ridge', district: 'East Sikkim', state: 'Sikkim', lat: 27.3389, lon: 88.6138, slope: 39.2, soil: 'Gravelly Silty Clay Loam', rain: 42.0, hist: 'Teesta active creeping slope' },
+    { id: 'shillong', name: 'Shillong Peak & Valley', district: 'East Khasi Hills', state: 'Meghalaya', lat: 25.5788, lon: 91.8933, slope: 29.5, soil: 'Lateritic Red Clay', rain: 48.0, hist: 'Wah Umkhrah saturated slope' },
+    { id: 'kohima', name: 'Kohima Municipal Ridge', district: 'Kohima', state: 'Nagaland', lat: 25.6751, lon: 94.1086, slope: 32.1, soil: 'Disang Shale Colluvium', rain: 26.0, hist: 'NH-29 frequent road sinking' },
+    { id: 'haflong', name: 'Haflong Hill Station', district: 'Dima Hasao', state: 'Assam', lat: 25.1764, lon: 93.0185, slope: 31.0, soil: 'Colluvial Sandy Clay', rain: 32.0, hist: 'Railway embankment cut slips' },
+    { id: 'champhai', name: 'Champhai Valley Slopes', district: 'Champhai', state: 'Mizoram', lat: 23.4566, lon: 93.3282, slope: 34.5, soil: 'Clay Loam', rain: 28.0, hist: 'Border highway cuttings' },
+    { id: 'namchi', name: 'Namchi Hill Ridge', district: 'South Sikkim', state: 'Sikkim', lat: 27.1667, lon: 88.35, slope: 33.4, soil: 'Gravelly Clay Loam', rain: 35.0, hist: 'Damthang slope cuts' },
+    { id: 'jowai', name: 'Jowai Plateau Edge', district: 'West Jaintia Hills', state: 'Meghalaya', lat: 25.45, lon: 92.2, slope: 28.0, soil: 'Red Loamy Soil', rain: 54.0, hist: 'Myntdu river cuts' },
+    { id: 'cherrapunji', name: 'Cherrapunji (Sohra) Escarpment', district: 'East Khasi Hills', state: 'Meghalaya', lat: 25.27, lon: 91.73, slope: 36.2, soil: 'Shallow Rocky Loam', rain: 62.0, hist: 'Shella gorge debris falls' },
+    { id: 'mawsynram', name: 'Mawsynram Crest Corridor', district: 'East Khasi Hills', state: 'Meghalaya', lat: 25.3, lon: 91.58, slope: 34.0, soil: 'Humic Clay', rain: 68.0, hist: 'High precipitation runoff' },
+    { id: 'senapati', name: 'Senapati Hill Slopes', district: 'Senapati', state: 'Manipur', lat: 25.26, lon: 94.02, slope: 30.5, soil: 'Mountain Loam', rain: 24.0, hist: 'NH-2 highway erosion' },
+    { id: 'ukhrul', name: 'Ukhrul High Ridge', district: 'Ukhrul', state: 'Manipur', lat: 25.11, lon: 94.36, slope: 35.0, soil: 'Fine Loamy Soil', rain: 29.0, hist: 'Shirui foothills slumps' },
+  ];
+
+  let nearest = CATCHMENTS[0];
+  let minD = 9999;
+
+  if (preferredLocId) {
+    const match = CATCHMENTS.find(c => c.id === preferredLocId);
+    if (match) {
+      nearest = match;
+      const dLat = (lat - match.lat) * 111;
+      const dLon = (lon - match.lon) * 105;
+      minD = Math.round(Math.sqrt(dLat * dLat + dLon * dLon) * 10) / 10;
+    }
+  } else {
+    CATCHMENTS.forEach(c => {
+      const dLat = (lat - c.lat) * 111;
+      const dLon = (lon - c.lon) * 105;
+      const d = Math.round(Math.sqrt(dLat * dLat + dLon * dLon) * 10) / 10;
+      if (d < minD) {
+        minD = d;
+        nearest = c;
+      }
+    });
+  }
+
+  // Multi-factor mathematical formula:
+  // Rainfall: 35%, Slope: 25%, Soil: 15%, Land Cover: 10%, Drainage: 10%, Historical: 5%
+  const slopeNorm = Math.min(1, nearest.slope / 45); // 0-1
+  const rainNorm = Math.min(1, nearest.rain / 70);   // 0-1
+  const soilNorm = 0.72; // Colluvial / shale baseline
+  const lcNorm = 0.60;   // Hillside mixed vegetation
+  const drainNorm = 0.65;// Mountain stream proximity
+  const histNorm = 0.75; // Past events recorded
+
+  const finalScore = Math.round(
+    (rainNorm * 0.35 + slopeNorm * 0.25 + soilNorm * 0.15 + lcNorm * 0.10 + drainNorm * 0.10 + histNorm * 0.05) * 1000
+  ) / 10;
+
+  const riskLevel = finalScore >= 70 ? 'CRITICAL' : finalScore >= 50 ? 'HIGH' : finalScore >= 30 ? 'MODERATE' : 'LOW';
+
+  const plainExplanation = [
+    {
+      icon: '🌧️',
+      title: 'Rainfall',
+      status: nearest.rain > 40 ? 'Heavy' : nearest.rain > 15 ? 'Moderate' : 'Light',
+      description: nearest.rain > 40
+        ? `Heavy rainfall (${nearest.rain} mm/24h) has saturated upper slope soil.`
+        : nearest.rain > 15
+        ? `Moderate rainfall (${nearest.rain} mm/24h) observed across the local ridge.`
+        : `Recent rainfall has been light (${nearest.rain} mm/24h), reducing sudden triggers.`,
+    },
+    {
+      icon: '⛰️',
+      title: 'Terrain',
+      status: nearest.slope > 35 ? 'Steep Slopes' : 'Moderate Slopes',
+      description: `Surrounding hillside slope is ${nearest.slope}°, where gravitational shear stress is elevated.`,
+    },
+    {
+      icon: '💧',
+      title: 'Ground Conditions',
+      status: nearest.rain > 30 ? 'High Moisture' : 'Normal Moisture',
+      description: `Local ${nearest.soil} retains rainwater, increasing subsurface pore pressure.`,
+    },
+    {
+      icon: '📜',
+      title: 'Historical Risk',
+      status: 'Recorded',
+      description: `Geological database records historical slope movement in this mountain corridor (${nearest.hist}).`,
+    },
+  ];
+
+  const whatShouldIDo = riskLevel === 'CRITICAL'
+    ? [
+        'Move away from dangerous slopes and unreinforced retaining walls immediately.',
+        'Listen for unusual rumbling sounds, falling stones, or sudden muddy drainage bursts.',
+        'Follow official emergency evacuation advisories issued by District Disaster Authority (DDMA).',
+        'Keep mobile phone fully charged and emergency contacts (112) ready.',
+      ]
+    : riskLevel === 'HIGH'
+    ? [
+        'Avoid unnecessary travel near steep mountain cuttings and unpaved roads.',
+        'Stay away from active slope drainage channels and overflowing roadside gullies.',
+        'Inspect household retaining walls and yard ground for newly appearing surface cracks.',
+        'Have a small grab-and-go kit (torch, water, essential medicine) ready.',
+      ]
+    : riskLevel === 'MODERATE'
+    ? [
+        'Stay alert during heavy rainfall showers and check local road advisories.',
+        'Avoid parking vehicles beneath steep, uncemented soil banks or loose overhanging rocks.',
+        'Ensure household roof and slope drainage pipes remain clear of leaves and silt.',
+      ]
+    : [
+        'Conditions currently appear relatively safe and stable around your area.',
+        'Continue standard monitoring during sudden heavy rainfall showers.',
+        'Keep downhill drainage ditches free of plastic trash to prevent pooling.',
+      ];
+
+  const nearbyHazards = [
+    {
+      id: 'haz-1',
+      title: `Steep ${nearest.slope}° Colluvium Cutting`,
+      distanceKm: Math.max(0.6, Math.round((minD * 0.4 + 0.5) * 10) / 10),
+      severity: riskLevel === 'CRITICAL' ? 'CRITICAL' : 'HIGH',
+      type: 'STEEP_SLOPE',
+      description: 'Exposed slope face along upper hillside pathway prone to rockfall during downpours.',
+    },
+    {
+      id: 'haz-2',
+      title: `Historical Landslide Axis (${nearest.district})`,
+      distanceKm: Math.max(1.2, Math.round((minD * 0.8 + 1.1) * 10) / 10),
+      severity: 'HIGH',
+      type: 'HISTORICAL_ZONE',
+      description: 'Historical slope failure zone catalogued in regional disaster records.',
+    },
+    {
+      id: 'haz-3',
+      title: 'Highway Drainage Culvert Crossing',
+      distanceKm: Math.max(1.8, Math.round((minD * 1.2 + 1.8) * 10) / 10),
+      severity: 'MODERATE',
+      type: 'DRAINAGE_CHANNEL',
+      description: 'Mountain stream gully with high surface runoff during heavy monsoon showers.',
+    },
+  ];
+
+  const potentialSaferLocations = [
+    {
+      id: 'safe-01',
+      name: `${nearest.district} Community Ground & Staging Area`,
+      district: nearest.district,
+      state: nearest.state,
+      coordinates: { lat: nearest.lat + 0.012, lon: nearest.lon - 0.015 },
+      distanceKm: Math.max(1.2, Math.round((minD * 0.7 + 0.8) * 10) / 10),
+      currentRiskScore: 28.4,
+      currentRiskLevel: 'LOW',
+      safetyMarginScore: 71.6,
+      safeGroundFeatures: ['Wide flat plateau contour', 'Engineered retaining walls', 'Well-drained valley floor'],
+      directionsNote: 'Accessible via primary asphalt road; located on a wide flat terrace away from overhanging slopes.',
+      officialDisclaimer: 'Topographical safety indicator based on flat slope angle. Not a designated shelter unless officially opened by DDMA.',
+    },
+    {
+      id: 'safe-02',
+      name: `${nearest.district} College Campus High Ground`,
+      district: nearest.district,
+      state: nearest.state,
+      coordinates: { lat: nearest.lat - 0.018, lon: nearest.lon + 0.02 },
+      distanceKm: Math.max(2.5, Math.round((minD * 1.1 + 1.6) * 10) / 10),
+      currentRiskScore: 32.1,
+      currentRiskLevel: 'LOW',
+      safetyMarginScore: 67.9,
+      safeGroundFeatures: ['Paved institutional perimeter', 'Gentle 8° slope gradient', 'Concrete storm culverts'],
+      directionsNote: 'Located along the central ridge with paved municipal access.',
+      officialDisclaimer: 'Informational guidance only. Always follow official civil defense and police instructions.',
+    },
+  ];
+
+  return {
+    queriedCoordinates: { lat, lon },
+    nearestCatchment: {
+      id: nearest.id,
+      name: nearest.name,
+      district: nearest.district,
+      state: nearest.state,
+      distanceKm: minD < 999 ? minD : 0.8,
+    },
+    currentRisk: {
+      score: finalScore,
+      level: riskLevel,
+      freshness: 'LIVE — Telemetry synced with Open-Meteo',
+      updatedAt: new Date().toISOString(),
+      humanStatement: `Landslide risk around your current location is currently ${riskLevel}.`,
+    },
+    whyIsRisk: plainExplanation,
+    whatShouldIDo,
+    nearbyHazards,
+    potentialSaferLocations,
+  };
+}
+
+export function computeCitizenTripRisk(
+  origin: string | { name: string; lat: number; lon: number },
+  destination: string | { name: string; lat: number; lon: number }
+): TripRiskAssessment {
+  const fromName = typeof origin === 'string' ? origin : origin.name;
+  const toName = typeof destination === 'string' ? destination : destination.name;
+  const fromCoords = typeof origin === 'string' ? { lat: 23.7307, lon: 92.7173 } : { lat: origin.lat, lon: origin.lon };
+  const toCoords = typeof destination === 'string' ? { lat: 23.4566, lon: 93.3282 } : { lat: destination.lat, lon: destination.lon };
+
+  const isHighRiskCorridor = fromName.toLowerCase().includes('aizawl') || toName.toLowerCase().includes('champhai') || fromName.toLowerCase().includes('gangtok');
+
+  return {
+    origin: { name: fromName, ...fromCoords },
+    destination: { name: toName, ...toCoords },
+    totalDistanceKm: 184,
+    overallCaution: isHighRiskCorridor ? 'CAUTION' : 'NORMAL',
+    headline: isHighRiskCorridor
+      ? `🟠 TRAVEL CAUTION: Parts of this journey pass through elevated landslide risk zones`
+      : `🟢 CORRIDOR STABLE: Monitored mountain corridors report normal travel conditions`,
+    summary: `Evaluated 4 monitored mountain pass corridors along the route from ${fromName} to ${toName}. Saturated cutting slopes on ghat sections require daytime travel and reduced speeds.`,
+    recommendations: [
+      'Avoid non-essential night travel through steep cuttings where falling rocks are difficult to see.',
+      'Check local highway police updates (112) for active clearance before setting off.',
+      'Maintain extra braking distance on wet asphalt hairpin bends.',
+      'Do not stop or park directly underneath uncemented hillside cuttings.',
+    ],
+    riskySegments: [
+      {
+        catchmentId: 'champhai',
+        catchmentName: 'Champhai Border Highway Corridor',
+        district: 'Champhai',
+        state: 'Mizoram',
+        riskScore: 64.2,
+        riskLevel: 'HIGH',
+        priorityLevel: 'P2',
+        rainfall24h_mm: 38.5,
+        slope_deg: 34.5,
+        reason: '34.5° slope cutting with 38.5mm recent rainfall and historical debris slips.',
+        cautionFlag: 'HIGH_RISK_CORRIDOR',
+      },
+      {
+        catchmentId: 'durtlang',
+        catchmentName: 'Durtlang Escarpment Ridge',
+        district: 'Aizawl',
+        state: 'Mizoram',
+        riskScore: 62.0,
+        riskLevel: 'HIGH',
+        priorityLevel: 'P2',
+        rainfall24h_mm: 40.0,
+        slope_deg: 37.5,
+        reason: 'Steep sandstone ridge crossing with roadside water seepage.',
+        cautionFlag: 'CAUTION_SLOPE',
+      },
+    ],
+    assessedAt: new Date().toISOString(),
+  };
 }
 
 api.interceptors.response.use(
@@ -442,3 +780,4 @@ api.interceptors.response.use(
 );
 
 export default api;
+

@@ -32,7 +32,7 @@ import { SitRepModal } from '../components/sitrep/SitRepModal';
 
 export function ResponseCenter() {
   const qc = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'board' | 'verification' | 'protocols'>('board');
+  const [activeTab, setActiveTab] = useState<'board' | 'verification' | 'citizen-reports' | 'protocols'>('board');
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [showSitRepModal, setShowSitRepModal] = useState(false);
@@ -42,6 +42,17 @@ export function ResponseCenter() {
   const { data: actionsData, isLoading: actionsLoading } = useQuery('response-actions', () =>
     api.get('/api/response/actions').then((r) => r.data.data as ResponseAction[])
   );
+  const { data: citizenReports } = useQuery('citizen-reports-rc', () =>
+    api.get('/api/citizen/reports').then((r) => r.data.data as any[])
+  );
+
+  const updateCitizenReportMutation = useMutation(
+    ({ id, status }: { id: string; status: string }) => api.patch(`/api/citizen/reports/${id}`, { status }),
+    {
+      onSuccess: () => qc.invalidateQueries('citizen-reports-rc'),
+    }
+  );
+
   const { data: verifData, isLoading: verifLoading } = useQuery('field-verifications', () =>
     api.get('/api/response/field-verifications').then((r) => r.data.data as FieldVerification[])
   );
@@ -162,6 +173,14 @@ export function ResponseCenter() {
               }`}
             >
               Field Verifications ({verifications.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('citizen-reports')}
+              className={`px-3 py-1.5 rounded text-xs font-medium ${
+                activeTab === 'citizen-reports' ? 'bg-brand text-white' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Citizen Hazard Queue ({citizenReports?.length || 0})
             </button>
             <button
               onClick={() => setActiveTab('protocols')}
@@ -360,6 +379,100 @@ export function ResponseCenter() {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* TAB: CITIZEN GROUND HAZARD QUEUE */}
+      {activeTab === 'citizen-reports' && (
+        <div className="space-y-4">
+          <div className="card p-5 bg-white border border-[#C8D8BC] space-y-2">
+            <div className="flex items-center justify-between border-b border-[#C8D8BC] pb-3">
+              <div className="flex items-center gap-2">
+                <Users size={18} className="text-[#4A7C59]" />
+                <h2 className="text-sm font-bold text-[#0F2018]">
+                  Incoming Crowdsourced Ground Reports
+                </h2>
+              </div>
+              <span className="text-xs font-mono font-bold text-[#4A7C59]">
+                {citizenReports?.length || 0} Reports Received
+              </span>
+            </div>
+            <p className="text-xs text-[#1A3028]">
+              Ground signals submitted by residents and travelers. Authorities can review photos, verify slope failures, and instantly link reports to NDRF/SDRF field response tasks.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {(citizenReports || []).map((report: any) => (
+              <div
+                key={report.id}
+                className="card p-4 bg-white border border-[#C8D8BC] space-y-3 shadow-xs"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                      {report.observationType ? report.observationType.replace(/_/g, ' ') : 'GROUND HAZARD'}
+                    </span>
+                    <span className={`text-xs font-bold ${report.status === 'VERIFIED' ? 'text-emerald-700' : 'text-amber-700'}`}>
+                      ● {report.status}
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-mono text-slate-500">
+                    {new Date(report.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                  </span>
+                </div>
+
+                <div>
+                  <div className="text-xs font-bold text-[#0F2018]">
+                    {report.locationName || report.nearestCatchmentName || 'NER Mountain Corridor'}
+                  </div>
+                  <div className="text-[11px] text-slate-500 font-mono mt-0.5">
+                    GPS: {report.coordinates ? `${report.coordinates.lat.toFixed(4)}°N, ${report.coordinates.lon.toFixed(4)}°E` : 'N/A'}
+                  </div>
+                </div>
+
+                {report.description && (
+                  <p className="text-xs text-[#1A3028] bg-[#F5F0E8] p-2.5 rounded-lg italic border border-[#C8D8BC]/60">
+                    "{report.description}"
+                  </p>
+                )}
+
+                {report.photoUrl && (
+                  <div className="relative h-40 rounded-xl overflow-hidden border border-[#C8D8BC]">
+                    <img src={report.photoUrl} alt="Ground photo" className="w-full h-full object-cover" />
+                    <span className="absolute bottom-2 right-2 bg-black/75 text-white text-[10px] px-2 py-0.5 rounded font-mono">
+                      Field Camera
+                    </span>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between text-xs text-slate-600 pt-2 border-t border-[#C8D8BC]">
+                  <div>
+                    Reporter: <span className="font-semibold text-[#0F2018]">{report.userName || 'Anonymous'}</span>
+                    {report.userPhone && <span className="font-mono ml-1">({report.userPhone})</span>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {report.status !== 'VERIFIED' && (
+                      <button
+                        onClick={() => updateCitizenReportMutation.mutate({ id: report.id, status: 'VERIFIED' })}
+                        className="px-2.5 py-1 rounded-lg bg-[#4A7C59] hover:bg-[#1A3028] text-white font-bold text-xs transition-colors"
+                      >
+                        ✓ Verify
+                      </button>
+                    )}
+                    {report.status !== 'DISMISSED' && (
+                      <button
+                        onClick={() => updateCitizenReportMutation.mutate({ id: report.id, status: 'DISMISSED' })}
+                        className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors"
+                      >
+                        Dismiss
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

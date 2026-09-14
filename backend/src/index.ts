@@ -13,6 +13,7 @@ import riskRoutes from './routes/risk';
 import alertRoutes from './routes/alerts';
 import responseRoutes from './routes/response';
 import simulationRoutes from './routes/simulation';
+import citizenRoutes from './routes/citizen';
 import {
   rainfallRouter,
   terrainRouter,
@@ -84,6 +85,7 @@ async function bootstrap(): Promise<void> {
   app.use('/api/risk', riskRoutes);
   app.use('/api/alerts', alertRoutes);
   app.use('/api/response', responseRoutes);
+  app.use('/api/citizen', citizenRoutes);
   app.use('/api/simulation', simulationRoutes);
   app.use('/api/rainfall', rainfallRouter);
   app.use('/api/terrain', terrainRouter);

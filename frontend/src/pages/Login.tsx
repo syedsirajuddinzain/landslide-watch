@@ -31,6 +31,7 @@ export default function Login() {
 
   const fillDemo = (role: string) => {
     const creds: Record<string, [string, string]> = {
+      citizen: ['citizen@landslidewatch.in', 'Citizen@SIH2026'],
       admin: ['admin@landslidewatch.in', 'Admin@SIH2026'],
       authority: ['authority@landslidewatch.in', 'Authority@SIH2026'],
       viewer: ['viewer@landslidewatch.in', 'Viewer@SIH2026'],
@@ -87,18 +88,32 @@ export default function Login() {
         </form>
 
         {/* 1-Click Instant Guest / Evaluator Entry */}
-        <button
-          onClick={() => demoLogin('authority')}
-          className="mt-4 w-full py-2.5 px-4 rounded-xl bg-[#4A7C59] hover:bg-[#1A3028] text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 border border-[#7FB99A]/40"
-        >
-          <span>🚀 Instant Guest Entry (No Login Required)</span>
-        </button>
+        <div className="mt-4 space-y-2">
+          <button
+            onClick={() => {
+              demoLogin('citizen');
+              navigate('/citizen');
+            }}
+            className="w-full py-2.5 px-4 rounded-xl bg-[#4A7C59] hover:bg-[#1A3028] text-white font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-2 border border-[#7FB99A]/40"
+          >
+            <span>👥 1-Click Entry: Citizen Safety View ("Am I safe?")</span>
+          </button>
+          <button
+            onClick={() => {
+              demoLogin('authority');
+              navigate('/');
+            }}
+            className="w-full py-2.5 px-4 rounded-xl bg-[#1A3028] hover:bg-[#0F2018] text-white font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-2 border border-[#C8D8BC]/40"
+          >
+            <span>🛡️ 1-Click Entry: Disaster Authority Cockpit (GIS & SOP)</span>
+          </button>
+        </div>
 
         {/* Demo quick-fill */}
         <div className="mt-4 card">
           <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Demo Accounts</div>
-          <div className="grid grid-cols-3 gap-2">
-            {['admin', 'authority', 'viewer'].map(role => (
+          <div className="grid grid-cols-4 gap-2">
+            {['citizen', 'authority', 'admin', 'viewer'].map(role => (
               <button key={role} onClick={() => fillDemo(role)}
                 className="text-xs py-1.5 px-2 rounded bg-surface hover:bg-surface-card border border-surface-border text-slate-300 hover:text-white capitalize transition-colors">
                 {role}

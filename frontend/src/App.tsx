@@ -8,6 +8,7 @@ import { Spinner } from './components/shared/Badges';
 
 // Dedicated Full-Featured Pages
 import Login from './pages/Login';
+import CitizenDashboard from './pages/citizen/CitizenDashboard';
 import CommandCenter from './pages/CommandCenter';
 import LiveRiskMap from './pages/LiveRiskMap';
 import { Locations } from './pages/Locations';
@@ -40,7 +41,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  const { initialize, initialized } = useAuthStore();
+  const { initialize, initialized, activePortal } = useAuthStore();
 
   useEffect(() => {
     initialize();
@@ -66,6 +67,30 @@ export default function App() {
           path="/"
           element={
             <ProtectedRoute>
+              {activePortal === 'citizen' ? (
+                <CitizenDashboard />
+              ) : (
+                <AppLayout>
+                  <CommandCenter />
+                </AppLayout>
+              )}
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/citizen"
+          element={
+            <ProtectedRoute>
+              <CitizenDashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/authority"
+          element={
+            <ProtectedRoute minRole="authority">
               <AppLayout>
                 <CommandCenter />
               </AppLayout>

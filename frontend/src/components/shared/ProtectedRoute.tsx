@@ -8,7 +8,7 @@ interface Props {
   minRole?: UserRole;
 }
 
-const ROLE_LEVEL: Record<UserRole, number> = { viewer: 1, authority: 2, admin: 3 };
+const ROLE_LEVEL: Record<UserRole, number> = { citizen: 1, viewer: 1, authority: 2, admin: 3 };
 
 export function ProtectedRoute({ children, minRole = 'viewer' }: Props) {
   const { user, role, initialized, demoLogin } = useAuthStore();

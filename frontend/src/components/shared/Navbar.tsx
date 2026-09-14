@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { Bell, Bot, Radio, Menu } from 'lucide-react';
+import { Bell, Bot, Radio, Menu, Users, ShieldAlert } from 'lucide-react';
 import { useQuery } from 'react-query';
 import api from '../../lib/api';
 import { Notification } from '../../types';
 import { useUIStore } from '../../store/uiStore';
+import { useAuthStore } from '../../store/authStore';
+import { useNavigate } from 'react-router-dom';
 import { GroundedAnalystModal } from '../ai/GroundedAnalystModal';
 import { CommandPalette } from './CommandPalette';
 
@@ -31,7 +33,9 @@ export function Navbar() {
   const path = '/' + location.pathname.split('/')[1];
   const title = BREADCRUMBS[path] || 'Landslide Watch';
   const isLocationDetail = location.pathname.startsWith('/locations/') && location.pathname !== '/locations';
+  const navigate = useNavigate();
   const { toggleSidebar } = useUIStore();
+  const { activePortal, switchPortal } = useAuthStore();
   const [showAnalyst, setShowAnalyst] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -95,6 +99,40 @@ export function Navbar() {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Dual-Portal Mode Switcher (Judge & User Convenience) */}
+          <div className="flex items-center bg-[#F5F0E8] p-0.5 rounded-xl border border-[#C8D8BC]">
+            <button
+              onClick={() => {
+                switchPortal('citizen');
+                navigate('/citizen');
+              }}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                activePortal === 'citizen'
+                  ? 'bg-[#4A7C59] text-white shadow-xs'
+                  : 'text-[#1A3028] hover:text-[#0F2018]'
+              }`}
+              title="Switch to Citizen Personal Safety view"
+            >
+              <Users size={12} />
+              <span className="hidden sm:inline">Citizen View</span>
+            </button>
+            <button
+              onClick={() => {
+                switchPortal('authority');
+                navigate('/');
+              }}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                activePortal === 'authority'
+                  ? 'bg-[#1A3028] text-white shadow-xs'
+                  : 'text-[#1A3028] hover:text-[#0F2018]'
+              }`}
+              title="Switch to Authority Command Center"
+            >
+              <ShieldAlert size={12} />
+              <span className="hidden sm:inline">Authority View</span>
+            </button>
+          </div>
+
           {/* Live Indian Standard Time Clock */}
           <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#F5F0E8] border border-[#C8D8BC] text-[#0F2018] text-xs font-mono font-bold">
             <Radio size={11} className="text-[#4A7C59] animate-pulse" />

@@ -8,7 +8,7 @@ export type Trend = 'RISING' | 'FALLING' | 'STABLE';
 export type AlertStatus = 'NEW' | 'ACKNOWLEDGED' | 'INVESTIGATING' | 'RESOLVED';
 export type DataQuality = 'GOOD' | 'STALE' | 'MISSING' | 'ERROR' | 'ESTIMATED' | 'SIMULATED';
 export type DataSourceStatus = 'LIVE' | 'STATIC' | 'STALE' | 'ERROR' | 'ESTIMATED' | 'SIMULATED';
-export type UserRole = 'admin' | 'authority' | 'viewer';
+export type UserRole = 'admin' | 'authority' | 'viewer' | 'citizen';
 export type ActionStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
 export type VerificationStatus =
   | 'PENDING_VERIFICATION'
@@ -458,5 +458,80 @@ export interface PaginatedResponse<T> {
   total: number;
   page: number;
   pageSize: number;
+}
+
+// ============================================================
+// CITIZEN PERSONAL SAFETY TYPES
+// ============================================================
+
+export type HazardObservationType =
+  | 'ROAD_BLOCKED'
+  | 'MUD_DEBRIS'
+  | 'FALLING_ROCKS'
+  | 'GROUND_CRACKS'
+  | 'UNUSUAL_WATER_FLOW'
+  | 'BUILDING_DAMAGE'
+  | 'LANDSLIDE'
+  | 'OTHER';
+
+export interface CitizenHazardReport {
+  id: string;
+  userId?: string;
+  userPhone?: string;
+  userName?: string;
+  coordinates: Coordinates;
+  locationName?: string;
+  nearestCatchmentId?: string;
+  nearestCatchmentName?: string;
+  distanceToCatchmentKm?: number;
+  observationType: HazardObservationType;
+  description?: string;
+  photoUrl?: string;
+  status: 'SUBMITTED' | 'UNDER_REVIEW' | 'VERIFIED' | 'DISMISSED';
+  createdAt: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  verificationId?: string;
+}
+
+export interface TripRiskSegment {
+  catchmentId: string;
+  catchmentName: string;
+  district: string;
+  state: string;
+  riskScore: number;
+  riskLevel: RiskLevel;
+  priorityLevel: PriorityLevel;
+  rainfall24h_mm: number;
+  slope_deg: number;
+  reason: string;
+  cautionFlag: 'HIGH_RISK_CORRIDOR' | 'CAUTION_SLOPE' | 'NORMAL';
+}
+
+export interface TripRiskAssessment {
+  origin: { name: string; lat: number; lon: number };
+  destination: { name: string; lat: number; lon: number };
+  totalDistanceKm: number;
+  overallCaution: 'NORMAL' | 'CAUTION' | 'HIGH_ALERT';
+  headline: string;
+  summary: string;
+  recommendations: string[];
+  riskySegments: TripRiskSegment[];
+  assessedAt: string;
+}
+
+export interface PotentialSaferLocation {
+  id: string;
+  name: string;
+  district: string;
+  state: string;
+  coordinates: Coordinates;
+  distanceKm: number;
+  currentRiskScore: number;
+  currentRiskLevel: RiskLevel;
+  safetyMarginScore: number;
+  safeGroundFeatures: string[];
+  directionsNote: string;
+  officialDisclaimer: string;
 }
 

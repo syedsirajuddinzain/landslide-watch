@@ -14,6 +14,8 @@ import { RiskDistributionChart } from '../components/charts/Charts';
 import { useNavigate } from 'react-router-dom';
 import {
   Activity,
+  Users,
+  Clock,
   Radio,
   ArrowRight,
   Zap,
@@ -40,7 +42,13 @@ export default function CommandCenter() {
     { refetchInterval: 60_000 }
   );
 
-  const rawLocations = (locData && locData.length > 0) ? locData : MOCK_LOCATIONS;
+  const { data: citizenReports } = useQuery(
+    'citizen-reports-cc',
+    () => api.get('/api/citizen/reports').then((r) => r.data.data as any[]),
+    { refetchInterval: 30_000 }
+  );
+
+    const rawLocations = (locData && locData.length > 0) ? locData : MOCK_LOCATIONS;
 
   // DYNAMIC RISK & TELEMETRY ENGINE BASED ON REAL-TIME ATMOSPHERIC SCENARIO
   const locations: Array<Location & { latestRisk?: RiskAssessment }> = rawLocations.map((loc) => {
@@ -197,15 +205,15 @@ export default function CommandCenter() {
       district: 'Aizawl',
       previousTimestamp: new Date(Date.now() - 3600000).toISOString(),
       currentTimestamp: new Date().toISOString(),
-      previousScore: 75.8,
-      currentScore: 86.8,
-      scoreDelta: 11.0,
-      previousLevel: 'CRITICAL',
+      previousScore: 68.4,
+      currentScore: 84.6,
+      scoreDelta: 16.2,
+      previousLevel: 'HIGH',
       currentLevel: 'CRITICAL',
-      levelChanged: false,
+      levelChanged: true,
       rainfall24hDelta: 38.0,
-      previousRainfall24h: 86.5,
-      currentRainfall24h: 124.5,
+      previousRainfall24h: 52.5,
+      currentRainfall24h: 90.5,
       primaryCause: 'Surma Shale Pore Pressure Saturation (38.4°)',
       isEscalation: true,
     },
@@ -216,15 +224,15 @@ export default function CommandCenter() {
       district: 'Aizawl',
       previousTimestamp: new Date(Date.now() - 3600000).toISOString(),
       currentTimestamp: new Date().toISOString(),
-      previousScore: 75.8,
-      currentScore: 61.8,
-      scoreDelta: -14.0,
-      previousLevel: 'CRITICAL',
-      currentLevel: 'HIGH',
+      previousScore: 68.4,
+      currentScore: 52.4,
+      scoreDelta: -16.0,
+      previousLevel: 'HIGH',
+      currentLevel: 'MODERATE',
       levelChanged: true,
       rainfall24hDelta: -45.0,
-      previousRainfall24h: 86.5,
-      currentRainfall24h: 41.5,
+      previousRainfall24h: 52.5,
+      currentRainfall24h: 7.5,
       primaryCause: 'Rainfall Receded & Topsoil Gravity Drainage Active',
       isEscalation: false,
     },
@@ -234,15 +242,15 @@ export default function CommandCenter() {
       district: 'East Sikkim',
       previousTimestamp: new Date(Date.now() - 3600000).toISOString(),
       currentTimestamp: new Date().toISOString(),
-      previousScore: 70.1,
-      currentScore: 56.1,
-      scoreDelta: -14.0,
-      previousLevel: 'CRITICAL',
-      currentLevel: 'HIGH',
+      previousScore: 67.2,
+      currentScore: 51.2,
+      scoreDelta: -16.0,
+      previousLevel: 'HIGH',
+      currentLevel: 'MODERATE',
       levelChanged: true,
       rainfall24hDelta: -38.0,
-      previousRainfall24h: 72.8,
-      currentRainfall24h: 34.8,
+      previousRainfall24h: 48.0,
+      currentRainfall24h: 10.0,
       primaryCause: 'Burtuk Axis Creep Stabilized Post-Rain',
       isEscalation: false,
     },
@@ -253,15 +261,15 @@ export default function CommandCenter() {
       district: 'Aizawl',
       previousTimestamp: new Date(Date.now() - 3600000).toISOString(),
       currentTimestamp: new Date().toISOString(),
-      previousScore: 61.6,
-      currentScore: 75.8,
-      scoreDelta: 14.2,
+      previousScore: 56.4,
+      currentScore: 68.4,
+      scoreDelta: 12.0,
       previousLevel: 'HIGH',
-      currentLevel: 'CRITICAL',
-      levelChanged: true,
+      currentLevel: 'HIGH',
+      levelChanged: false,
       rainfall24hDelta: 24.5,
-      previousRainfall24h: 62.0,
-      currentRainfall24h: 86.5,
+      previousRainfall24h: 28.0,
+      currentRainfall24h: 52.5,
       primaryCause: 'Intense Cloudburst Saturation & 38° Slope Runoff',
       isEscalation: true,
     },
@@ -493,6 +501,78 @@ export default function CommandCenter() {
             </div>
             <RiskDistributionChart data={stats} />
           </div>
+        </div>
+      </div>
+
+      {/* Citizen Ground Hazard Intelligence (Dual-Platform Shared Loop) */}
+      <div className="card p-0 overflow-hidden border border-[#C8D8BC]">
+        <div className="px-5 py-4 border-b border-[#C8D8BC] bg-[#F5F0E8] flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="p-1.5 rounded-lg bg-[#4A7C59]/10 text-[#4A7C59]">
+              <Users size={16} />
+            </span>
+            <div>
+              <span className="text-sm font-bold text-[#0F2018]">Incoming Citizen Ground Reports</span>
+              <span className="text-xs text-[#1A3028] font-semibold ml-2">
+                (Ground-truth Crowdsourced Hazard Signals)
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate('/response')}
+            className="text-xs text-[#4A7C59] font-bold hover:text-[#0F2018] flex items-center gap-1 transition-colors"
+          >
+            <span>Dispatch / Verify in Response Center</span>
+            <ArrowRight size={13} />
+          </button>
+        </div>
+
+        <div className="p-4">
+          {citizenReports && citizenReports.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {citizenReports.slice(0, 3).map((report: any) => (
+                <div key={report.id} className="p-3 bg-[#F5F0E8]/60 rounded-xl border border-[#C8D8BC] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                      {report.observationType ? report.observationType.replace(/_/g, ' ') : 'HAZARD'}
+                    </span>
+                    <span className="text-[10px] font-mono text-[#1A3028] flex items-center gap-1">
+                      <Clock size={10} />
+                      {new Date(report.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                  <div className="text-xs font-bold text-[#0F2018]">
+                    {report.locationName || report.nearestCatchmentName || 'NER Mountain Corridor'}
+                  </div>
+                  {report.description && (
+                    <p className="text-[11px] text-[#1A3028] line-clamp-2 italic">
+                      "{report.description}"
+                    </p>
+                  )}
+                  {report.photoUrl && (
+                    <div className="relative h-24 rounded-lg overflow-hidden border border-[#C8D8BC]">
+                      <img src={report.photoUrl} alt="Ground photo" className="w-full h-full object-cover" />
+                      <span className="absolute bottom-1 right-1 bg-black/70 text-white text-[9px] px-1.5 py-0.5 rounded font-mono">
+                        GPS Verified
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between text-[10px] pt-1 border-t border-[#C8D8BC]/60">
+                    <span className="text-[#1A3028] font-mono">
+                      {report.coordinates ? `${report.coordinates.lat.toFixed(3)}°N, ${report.coordinates.lon.toFixed(3)}°E` : 'NER Field GPS'}
+                    </span>
+                    <span className={`font-bold ${report.status === 'VERIFIED' ? 'text-emerald-700' : 'text-amber-700'}`}>
+                      ● {report.status}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-5 text-xs text-[#1A3028]">
+              No active citizen ground hazard reports pending verification.
+            </div>
+          )}
         </div>
       </div>
 
