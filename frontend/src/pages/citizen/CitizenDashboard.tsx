@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from 'react-query';
 import {
   Shield,
   MapPin,
@@ -15,29 +16,17 @@ import {
   ExternalLink,
   ChevronRight,
   Sparkles,
+  AlertTriangle,
+  ArrowLeft,
+  X,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
-import { computeCitizenLocationRisk, getStoredCitizenReports } from '../../lib/api';
+import api, { computeCitizenLocationRisk, getStoredCitizenReports } from '../../lib/api';
+import { isLocationInNER, NER_CATCHMENT_PRESETS, NER_STATES } from '../../lib/geoUtils';
 import { CitizenMap } from './CitizenMap';
 import { ReportHazardModal } from './ReportHazardModal';
 import { TripCheckModal } from './TripCheckModal';
 import { SaferLocationModal } from './SaferLocationModal';
-
-const NER_CATCHMENTS = [
-  { id: 'aizawl', name: 'Aizawl', district: 'Aizawl', state: 'Mizoram', lat: 23.7307, lon: 92.7173 },
-  { id: 'gangtok', name: 'Gangtok', district: 'East Sikkim', state: 'Sikkim', lat: 27.3389, lon: 88.6138 },
-  { id: 'shillong', name: 'Shillong', district: 'East Khasi Hills', state: 'Meghalaya', lat: 25.5788, lon: 91.8933 },
-  { id: 'kohima', name: 'Kohima', district: 'Kohima', state: 'Nagaland', lat: 25.6751, lon: 94.1086 },
-  { id: 'haflong', name: 'Haflong', district: 'Dima Hasao', state: 'Assam', lat: 25.1764, lon: 93.0185 },
-  { id: 'champhai', name: 'Champhai', district: 'Champhai', state: 'Mizoram', lat: 23.4566, lon: 93.3282 },
-  { id: 'cherrapunji', name: 'Cherrapunji (Sohra)', district: 'East Khasi Hills', state: 'Meghalaya', lat: 25.27, lon: 91.73 },
-  { id: 'mawsynram', name: 'Mawsynram', district: 'East Khasi Hills', state: 'Meghalaya', lat: 25.3, lon: 91.58 },
-  { id: 'namchi', name: 'Namchi', district: 'South Sikkim', state: 'Sikkim', lat: 27.1667, lon: 88.35 },
-  { id: 'jowai', name: 'Jowai', district: 'West Jaintia Hills', state: 'Meghalaya', lat: 25.45, lon: 92.2 },
-  { id: 'senapati', name: 'Senapati', district: 'Senapati', state: 'Manipur', lat: 25.26, lon: 94.02 },
-  { id: 'ukhrul', name: 'Ukhrul', district: 'Ukhrul', state: 'Manipur', lat: 25.11, lon: 94.36 },
-  { id: 'guwahati', name: 'Guwahati (Kamrup)', district: 'Kamrup Metro', state: 'Assam', lat: 26.1445, lon: 91.7362 },
-];
 
 export function CitizenDashboard() {
   const navigate = useNavigate();
@@ -46,6 +35,8 @@ export function CitizenDashboard() {
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [locationSearch, setLocationSearch] = useState('');
   const [isLocatingGPS, setIsLocatingGPS] = useState(false);
+  const [selectedStateFilter, setSelectedStateFilter] = useState('All');
+  const [denialAlert, setDenialAlert] = useState<string | null>(null);
 
   // Active modals
   const [showReportModal, setShowReportModal] = useState(false);
@@ -55,40 +46,60 @@ export function CitizenDashboard() {
   // Toast feedback
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
+  // Fetch authoritative locations from backend (or fallback via api interceptor)
+  const { data: locationsData } = useQuery(
+    'locations',
+    () => api.get('/api/locations').then((r) => r.data.data),
+    { refetchInterval: 60_000 }
+  );
+
   // Current Coordinates & Data
   const currentCoords = userLocation || { lat: 23.7307, lon: 92.7173, name: 'Aizawl, Mizoram' };
-  const [riskData, setRiskData] = useState<any>(() => computeCitizenLocationRisk(currentCoords.lat, currentCoords.lon));
+  const [riskData, setRiskData] = useState<any>(() =>
+    computeCitizenLocationRisk(currentCoords.lat, currentCoords.lon, undefined, locationsData)
+  );
   const [citizenReports, setCitizenReports] = useState<any[]>(() => getStoredCitizenReports());
 
   // Greeting calculation
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
-  // Fetch or calculate risk when location changes
+  // Synchronize risk calculation when location changes or API data arrives
   useEffect(() => {
-    const updated = computeCitizenLocationRisk(currentCoords.lat, currentCoords.lon);
+    const updated = computeCitizenLocationRisk(currentCoords.lat, currentCoords.lon, undefined, locationsData);
     setRiskData(updated);
-  }, [currentCoords.lat, currentCoords.lon]);
+  }, [currentCoords.lat, currentCoords.lon, locationsData]);
 
-  // Use Browser Geolocation
+  // Use Browser Geolocation with Strict NER Boundary Check
   const handleUseGPS = () => {
     if (!navigator.geolocation) {
-      showToast('Geolocation is not supported by your browser. Please select manually.');
+      showToast('Geolocation is not supported by your browser. Please select from Northeast India list.');
       return;
     }
     setIsLocatingGPS(true);
+    setDenialAlert(null);
+
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setIsLocatingGPS(false);
         const lat = pos.coords.latitude;
         const lon = pos.coords.longitude;
 
-        const data = computeCitizenLocationRisk(lat, lon);
+        // Strict NER Boundary Verification
+        const check = isLocationInNER(lat, lon);
+        if (!check.allowed) {
+          setDenialAlert(check.reason || 'Location outside Northeast India is not permitted.');
+          showToast('⚠️ Location is outside Northeast India. Only NER locations are monitored.');
+          setShowLocationPicker(true);
+          return;
+        }
+
+        const data = computeCitizenLocationRisk(lat, lon, undefined, locationsData);
         const name = `${data.nearestCatchment?.name || 'Local'} Area (${data.nearestCatchment?.distanceKm || 1} km)`;
 
         setUserLocation({ lat, lon, name });
         setShowLocationPicker(false);
-        showToast('📍 Updated to your live GPS coordinates');
+        showToast('📍 Updated to your live GPS coordinates in Northeast India');
       },
       () => {
         setIsLocatingGPS(false);
@@ -99,15 +110,16 @@ export function CitizenDashboard() {
     );
   };
 
-  const handleSelectCatchment = (c: (typeof NER_CATCHMENTS)[0]) => {
+  const handleSelectCatchment = (c: any) => {
     setUserLocation({ lat: c.lat, lon: c.lon, name: `${c.name}, ${c.state}` });
     setShowLocationPicker(false);
+    setDenialAlert(null);
     showToast(`📍 Set location to ${c.name}, ${c.state}`);
   };
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
-    setTimeout(() => setToastMsg(null), 3000);
+    setTimeout(() => setToastMsg(null), 3500);
   };
 
   const handleShareLocation = () => {
@@ -219,6 +231,13 @@ export function CitizenDashboard() {
 
           <div className="flex items-center gap-2">
             <button
+              onClick={() => navigate('/citizen/welcome')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#F5F0E8] border border-[#C8D8BC] hover:border-[#4A7C59] text-xs font-bold text-[#0F2018] transition-all"
+              title="Return to Welcome & Region Guide"
+            >
+              <span>🏠 Welcome Guide</span>
+            </button>
+            <button
               onClick={() => {
                 switchPortal('authority');
                 navigate('/map');
@@ -242,6 +261,22 @@ export function CitizenDashboard() {
 
       {/* Main Content Area */}
       <main className="max-w-2xl mx-auto w-full p-4 space-y-4 flex-1">
+        {/* Denial Alert Banner if non-NER attempted */}
+        {denialAlert && (
+          <div className="p-3.5 rounded-2xl bg-rose-50 border-2 border-rose-400 text-rose-900 text-xs flex items-start justify-between gap-2 shadow-xs">
+            <div className="flex items-center gap-2 font-bold">
+              <AlertTriangle size={16} className="text-rose-600 shrink-0" />
+              <span>{denialAlert}</span>
+            </div>
+            <button
+              onClick={() => setDenialAlert(null)}
+              className="text-rose-600 hover:text-rose-900 font-bold"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
         {/* Greeting & Location Selector */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
@@ -271,10 +306,32 @@ export function CitizenDashboard() {
 
         {/* PRIMARY "AM I SAFE RIGHT NOW?" RISK CARD */}
         <div className={`p-5 rounded-3xl border-2 ${riskCardBorder} shadow-sm space-y-4`}>
-          <div className="flex items-center justify-between">
-            <span className={`text-xs font-black uppercase tracking-wider px-3 py-1 rounded-full border ${riskBadgeColor}`}>
-              ● {risk.badge || risk.level}
-            </span>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className={`text-xs font-black uppercase tracking-wider px-3 py-1 rounded-full border ${riskBadgeColor}`}>
+                ● {risk.badge || risk.level}
+              </span>
+              {risk.priorityLevel && (
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-white text-slate-800 border border-slate-300 shadow-xs">
+                  {risk.priorityLevel} Tier
+                </span>
+              )}
+              {risk.trend && (
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                  risk.trend === 'RISING'
+                    ? 'bg-rose-50 text-rose-700 border-rose-200'
+                    : risk.trend === 'FALLING'
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-slate-50 text-slate-700 border-slate-200'
+                }`}>
+                  {risk.trend === 'RISING' ? '▲' : risk.trend === 'FALLING' ? '▼' : '●'} {risk.trend}
+                  {typeof risk.trendPct === 'number' && risk.trendPct !== 0
+                    ? ` (${risk.trendPct > 0 ? '+' : ''}${risk.trendPct}%)`
+                    : ''}
+                </span>
+              )}
+            </div>
+
             <div className="text-right">
               <span className="text-2xl font-black font-mono text-[#0F2018]">
                 {typeof risk.score === 'number' ? risk.score.toFixed(1) : risk.score}
@@ -470,56 +527,112 @@ export function CitizenDashboard() {
         </div>
       </main>
 
-      {/* LOCATION PICKER MODAL */}
+      {/* LOCATION PICKER MODAL WITH NER BOUNDARY ENFORCEMENT */}
       {showLocationPicker && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-2xl border border-[#C8D8BC] shadow-xl w-full max-w-sm overflow-hidden flex flex-col max-h-[80vh]">
+          <div className="bg-white rounded-2xl border border-[#C8D8BC] shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[85vh]">
             <div className="p-4 border-b border-[#C8D8BC] bg-[#F5F0E8] flex items-center justify-between">
-              <div className="text-xs font-bold text-[#0F2018]">Choose Your Location</div>
+              <div>
+                <div className="text-xs font-black text-[#0F2018]">Select Northeast India Location</div>
+                <div className="text-[10px] text-[#1A3028]">Monitored across the 8 NER States</div>
+              </div>
               <button
-                onClick={() => setShowLocationPicker(false)}
-                className="text-xs text-[#1A3028] font-bold hover:text-black"
+                onClick={() => {
+                  setShowLocationPicker(false);
+                  setDenialAlert(null);
+                }}
+                className="text-xs text-[#1A3028] font-bold hover:text-black p-1"
               >
-                Close
+                Close ✕
               </button>
             </div>
 
-            <div className="p-3 border-b border-[#C8D8BC]">
+            {/* Non-NER Warning Banner */}
+            {(() => {
+              const check = locationSearch.trim().length >= 3 ? isLocationInNER(0, 0, locationSearch) : { allowed: true };
+              if (!check.allowed || denialAlert) {
+                return (
+                  <div className="m-3 p-3 rounded-xl bg-rose-50 border border-rose-300 text-rose-900 text-[11px] space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold">
+                      <AlertTriangle size={14} className="text-rose-600 shrink-0" />
+                      <span>Outside Operational NER Boundary</span>
+                    </div>
+                    <div className="leading-snug">{check.reason || denialAlert}</div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+
+            <div className="p-3 border-b border-[#C8D8BC] space-y-2">
               <div className="relative">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Search NER district or town..."
+                  placeholder="Search NER district, town, or mountain pass..."
                   value={locationSearch}
                   onChange={(e) => setLocationSearch(e.target.value)}
                   className="w-full pl-8 pr-3 py-2 rounded-xl border border-[#C8D8BC] text-xs text-[#0F2018] focus:outline-none focus:border-[#4A7C59]"
                 />
               </div>
+
+              {/* State Filter Pills */}
+              <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none text-[11px]">
+                <button
+                  onClick={() => setSelectedStateFilter('All')}
+                  className={`px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all ${
+                    selectedStateFilter === 'All'
+                      ? 'bg-[#0F2018] text-white'
+                      : 'bg-[#FAF7F2] border border-[#C8D8BC] text-[#1A3028]'
+                  }`}
+                >
+                  All 8 States
+                </button>
+                {NER_STATES.map((st) => (
+                  <button
+                    key={st}
+                    onClick={() => setSelectedStateFilter(st)}
+                    className={`px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all ${
+                      selectedStateFilter === st
+                        ? 'bg-[#4A7C59] text-white'
+                        : 'bg-[#FAF7F2] border border-[#C8D8BC] text-[#1A3028]'
+                    }`}
+                  >
+                    {st}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="overflow-y-auto p-2 space-y-1 text-xs">
+            <div className="overflow-y-auto p-2 space-y-1 text-xs flex-1">
               <button
                 onClick={handleUseGPS}
                 className="w-full p-2.5 rounded-xl bg-[#4A7C59]/10 text-[#4A7C59] font-bold text-left flex items-center gap-2 hover:bg-[#4A7C59]/20 transition-colors"
               >
                 <Compass size={15} />
-                <span>Use Live GPS Location</span>
+                <span>Auto-Detect My GPS (Northeast India)</span>
               </button>
 
-              {NER_CATCHMENTS.filter((c) =>
-                c.name.toLowerCase().includes(locationSearch.toLowerCase()) ||
-                c.state.toLowerCase().includes(locationSearch.toLowerCase())
-              ).map((c) => (
+              {NER_CATCHMENT_PRESETS.filter((c) => {
+                const matchState = selectedStateFilter === 'All' || c.state === selectedStateFilter;
+                const q = locationSearch.toLowerCase().trim();
+                const matchSearch =
+                  !q ||
+                  c.name.toLowerCase().includes(q) ||
+                  c.district.toLowerCase().includes(q) ||
+                  c.state.toLowerCase().includes(q);
+                return matchState && matchSearch;
+              }).map((c) => (
                 <button
                   key={c.id}
                   onClick={() => handleSelectCatchment(c)}
-                  className="w-full p-2.5 rounded-xl hover:bg-[#F5F0E8] text-left transition-colors flex items-center justify-between"
+                  className="w-full p-2.5 rounded-xl hover:bg-[#F5F0E8] text-left transition-colors flex items-center justify-between border border-transparent hover:border-[#C8D8BC]"
                 >
                   <div>
                     <div className="font-bold text-[#0F2018]">{c.name}</div>
-                    <div className="text-[10px] text-[#1A3028]">{c.district}, {c.state}</div>
+                    <div className="text-[10px] text-[#1A3028]">{c.district}, {c.state} • {c.description}</div>
                   </div>
-                  <MapPin size={13} className="text-slate-400" />
+                  <MapPin size={13} className="text-slate-400 shrink-0" />
                 </button>
               ))}
             </div>

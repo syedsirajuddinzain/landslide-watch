@@ -8,6 +8,7 @@ import { Spinner } from './components/shared/Badges';
 
 // Dedicated Full-Featured Pages
 import Login from './pages/Login';
+import CitizenWelcome from './pages/citizen/CitizenWelcome';
 import CitizenDashboard from './pages/citizen/CitizenDashboard';
 import CommandCenter from './pages/CommandCenter';
 import LiveRiskMap from './pages/LiveRiskMap';
@@ -68,7 +69,7 @@ export default function App() {
           element={
             <ProtectedRoute>
               {activePortal === 'citizen' ? (
-                <CitizenDashboard />
+                <CitizenWelcome />
               ) : (
                 <AppLayout>
                   <CommandCenter />
@@ -78,8 +79,27 @@ export default function App() {
           }
         />
 
+        {/* Multi-Page Citizen Experience */}
         <Route
           path="/citizen"
+          element={
+            <ProtectedRoute>
+              <CitizenWelcome />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/citizen/welcome"
+          element={
+            <ProtectedRoute>
+              <CitizenWelcome />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/citizen/dashboard"
           element={
             <ProtectedRoute>
               <CitizenDashboard />
