@@ -86,17 +86,18 @@ export function CitizenDashboard({ initialWelcome = false }: CitizenDashboardPro
       setIsLoadingRisk(true);
       try {
         const res = await api.get(`/api/citizen/risk-at-location?lat=${currentCoords.lat}&lon=${currentCoords.lon}`);
-        if (isMounted && res.data?.success) {
-          if (res.data.isWithinNER === false) {
+        const resData = res.data;
+        if (isMounted && resData && typeof resData === 'object' && resData.success) {
+          if (resData.isWithinNER === false || resData.data?.isWithinNER === false) {
             setRiskData({
               isWithinNER: false,
-              message: res.data.message,
-              coordinates: res.data.coordinates,
-              nearestCatchment: res.data.nearestCatchment,
-              distanceToNearestCatchmentKm: res.data.distanceToNearestCatchmentKm,
+              message: resData.message || resData.data?.message,
+              coordinates: resData.coordinates || resData.data?.coordinates,
+              nearestCatchment: resData.nearestCatchment || resData.data?.nearestCatchment,
+              distanceToNearestCatchmentKm: resData.distanceToNearestCatchmentKm || resData.data?.distanceToNearestCatchmentKm,
             });
-          } else if (res.data.data) {
-            const backendData = res.data.data;
+          } else if (resData.data) {
+            const backendData = resData.data;
             setRiskData({
               isWithinNER: true,
               currentRisk: backendData.currentRisk,
@@ -117,10 +118,12 @@ export function CitizenDashboard({ initialWelcome = false }: CitizenDashboardPro
               },
             });
           }
+        } else if (isMounted) {
+          const updated = computeCitizenLocationRisk(currentCoords.lat, currentCoords.lon);
+          setRiskData(updated);
         }
       } catch {
         if (isMounted) {
-          // Fallback to local deterministic calculator
           const updated = computeCitizenLocationRisk(currentCoords.lat, currentCoords.lon);
           setRiskData(updated);
         }
@@ -178,6 +181,8 @@ export function CitizenDashboard({ initialWelcome = false }: CitizenDashboardPro
           : `GPS: ${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E (Out of Region)`;
 
         setUserLocation({ lat, lon, name });
+        const immediateData = computeCitizenLocationRisk(lat, lon, nearest.id);
+        setRiskData(immediateData);
         setShowLocationPicker(false);
         showToast(
           isWithinNER
@@ -195,9 +200,13 @@ export function CitizenDashboard({ initialWelcome = false }: CitizenDashboardPro
   };
 
   const handleSelectCatchment = (loc: (typeof MONITORED_NER_LOCATIONS)[0]) => {
-    setUserLocation({ lat: loc.lat, lon: loc.lon, name: `${loc.name}, ${loc.state}` });
+    const newLoc = { lat: loc.lat, lon: loc.lon, name: `${loc.name}, ${loc.state}` };
+    setUserLocation(newLoc);
+    // Instantly compute and apply the new location's unique risk assessment
+    const immediateData = computeCitizenLocationRisk(loc.lat, loc.lon, loc.id);
+    setRiskData(immediateData);
     setShowLocationPicker(false);
-    showToast(`📍 Set location to ${loc.name}, ${loc.state}`);
+    showToast(`📍 Location changed to ${loc.name}, ${loc.state}`);
   };
 
   const showToast = (msg: string) => {
