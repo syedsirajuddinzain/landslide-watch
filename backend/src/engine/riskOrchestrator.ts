@@ -36,15 +36,20 @@ async function getLatestRainfall(
   db: FirebaseFirestore.Firestore,
   locationId: string
 ): Promise<RainfallObservation | null> {
-  const snap = await db
-    .collection(COLLECTIONS.RAINFALL)
-    .where('locationId', '==', locationId)
-    .orderBy('timestamp', 'desc')
-    .limit(1)
-    .get();
+  try {
+    const snap = await db
+      .collection(COLLECTIONS.RAINFALL)
+      .where('locationId', '==', locationId)
+      .get();
 
-  if (snap.empty) return null;
-  return snap.docs[0].data() as RainfallObservation;
+    if (snap.empty) return null;
+    const sorted = snap.docs
+      .map((d) => d.data() as RainfallObservation)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return sorted[0];
+  } catch {
+    return null;
+  }
 }
 
 async function countHistoricalLandslides(
@@ -80,13 +85,15 @@ async function getPreviousScore(
     const snap = await db
       .collection(COLLECTIONS.RISK_ASSESSMENTS)
       .where('locationId', '==', locationId)
-      .orderBy('timestamp', 'desc')
-      .limit(2)
       .get();
 
-    if (snap.docs.length >= 2) {
-      const prev = snap.docs[1].data() as RiskAssessment;
-      return prev.finalScore;
+    if (!snap.empty) {
+      const sorted = snap.docs
+        .map((d) => d.data() as RiskAssessment)
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      if (sorted.length >= 2) {
+        return sorted[1].finalScore;
+      }
     }
   } catch {}
   return undefined;

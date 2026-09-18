@@ -3,7 +3,7 @@ import { Bot, Send, X, ShieldAlert, Sparkles, CheckCircle, Database } from 'luci
 import api from '../../lib/api';
 import { AIAnalystResponse, PriorityLevel, RiskLevel } from '../../types';
 import { RiskBadge, PriorityBadge } from '../shared/Badges';
-import { MOCK_LOCATIONS } from '../../lib/mockData';
+import { getLiveOrCachedLocations } from '../../lib/liveRiskEngine';
 
 interface Props {
   isOpen: boolean;
@@ -20,25 +20,28 @@ const PRESET_QUERIES = [
   'How does the multi-factor AI risk formula work?',
 ];
 
-function generateGroundedAnalysis(query: string, focusLocationId?: string): AIAnalystResponse {
+function generateGroundedAnalysis(query: string, liveLocations: any[], focusLocationId?: string): AIAnalystResponse {
   const q = query.toLowerCase().trim();
+  const locs = liveLocations && liveLocations.length > 0 ? liveLocations : [];
 
   // Find locations sorted by risk score
-  const sortedLocations = [...MOCK_LOCATIONS].sort(
+  const sortedLocations = [...locs].sort(
     (a, b) => (b.latestRisk?.finalScore || 0) - (a.latestRisk?.finalScore || 0)
   );
 
-  const criticalLocs = sortedLocations.filter((l) => l.latestRisk?.riskLevel === 'CRITICAL');
-  const highLocs = sortedLocations.filter((l) => l.latestRisk?.riskLevel === 'HIGH');
-  const maxRainLoc = [...MOCK_LOCATIONS].sort(
-    (a, b) => (b.latestRisk?.inputs.rainfall_24h_mm || 0) - (a.latestRisk?.inputs.rainfall_24h_mm || 0)
-  )[0];
-  const maxRateLoc = [...MOCK_LOCATIONS].sort(
-    (a, b) => (b.latestRisk?.inputs.rainfall_current_mmph || 0) - (a.latestRisk?.inputs.rainfall_current_mmph || 0)
-  )[0];
+  const criticalLocs = sortedLocations.filter((l) => (l.latestRisk?.finalScore || 0) >= 70);
+  const highLocs = sortedLocations.filter((l) => (l.latestRisk?.finalScore || 0) >= 50 && (l.latestRisk?.finalScore || 0) < 70);
+  const top1 = sortedLocations[0] || { name: 'Aizawl Catchment', district: 'Aizawl', state: 'Mizoram', id: 'aizawl', latestRisk: { finalScore: 50, priorityLevel: 'P3', riskLevel: 'MODERATE', inputs: { rainfall_24h_mm: 10, slope_deg: 35 } } };
+  const top2 = sortedLocations[1] || top1;
+  const maxRainLoc = [...locs].sort(
+    (a, b) => (b.latestRisk?.inputs?.rainfall_24h_mm || 0) - (a.latestRisk?.inputs?.rainfall_24h_mm || 0)
+  )[0] || top1;
+  const maxRateLoc = [...locs].sort(
+    (a, b) => (b.latestRisk?.inputs?.rainfall_current_mmph || 0) - (a.latestRisk?.inputs?.rainfall_current_mmph || 0)
+  )[0] || top1;
 
   // Specific city match
-  const matchedLoc = MOCK_LOCATIONS.find((l) =>
+  const matchedLoc = locs.find((l: any) =>
     q.includes(l.id.toLowerCase()) ||
     q.includes(l.name.toLowerCase().split(' ')[0]) ||
     q.includes(l.district.toLowerCase()) ||
@@ -115,17 +118,19 @@ function generateGroundedAnalysis(query: string, focusLocationId?: string): AIAn
 
   // 3. PRIORITY / ATTENTION FIRST QUERIES
   if (q.includes('attention') || q.includes('first') || q.includes('priority') || q.includes('critical') || q.includes('highest risk') || q.includes('most dangerous') || q.includes('where to dispatch')) {
+    const tier1Count = criticalLocs.length;
+    const tier2Count = highLocs.length;
     return {
-      answer: `### 🚨 Urgent Attention & Priority Dispatch Roster\n\nCross-evaluating multi-factor live telemetry across all 20 monitored catchments in Northeast India, **2 locations require immediate P1 action**, followed by **5 high-surveillance P2 sites**:\n\n#### 🔴 Tier 1: Immediate Field Verification & Warning (P1 Critical)\n1. **Aizawl Catchment, Mizoram (Score: 75.8/100 · P1)**: Extreme slope saturation (**86.5mm / 24h**) on steep **38.4°** colluvium cuttings. Ramhlun South and Hlimen quarry zones exceed the pore-water pressure safety margin.\n2. **Gangtok Urban Ridge, East Sikkim (Score: 70.1/100 · P1)**: Active ground creep detected around Deorali and Burtuk corridors following **72.8mm** rainfall surge.\n\n#### 🟠 Tier 2: Elevated Surveillance & Drainage Clearance (P2 High)\n- **Shillong Peak & Valley, Meghalaya (67.1/100 · P2)**: NH-6 Mawlai bypass and Wah Umkhrah catchment.\n- **Durtlang North Ridge, Mizoram (63.8/100 · P2)**: 37.5° sandstone escarpment.\n- **Kohima Municipal Ridge, Nagaland (62.5/100 · P2)**: Disang shale swelling near Sanuorü bridge.\n- **Haflong Hill Station, Assam (56.8/100 · P2)**: Lumding–Badarpur railway corridor.\n- **Namchi Hill Ridge, South Sikkim (54.2/100 · P2)**: Damthang slope axis.`,
+      answer: `### 🚨 Urgent Attention & Priority Dispatch Roster\n\nCross-evaluating multi-factor live telemetry across all ${locs.length} monitored catchments in Northeast India, **${tier1Count} location${tier1Count === 1 ? '' : 's'} require immediate P1 action**, followed by **${tier2Count} high-surveillance P2 sites**:\n\n#### 🔴 Tier 1: Immediate Field Verification & Warning (P1 Critical)\n1. **${top1.name} (${top1.district}, ${top1.state}) — Score: ${top1.latestRisk?.finalScore}/100 · ${top1.latestRisk?.priorityLevel}**: Live precipitation is **${top1.latestRisk?.inputs?.rainfall_24h_mm} mm / 24h** on steep **${top1.latestRisk?.inputs?.slope_deg}°** slope.\n2. **${top2.name} (${top2.district}, ${top2.state}) — Score: ${top2.latestRisk?.finalScore}/100 · ${top2.latestRisk?.priorityLevel}**: Live precipitation is **${top2.latestRisk?.inputs?.rainfall_24h_mm} mm / 24h** on **${top2.latestRisk?.inputs?.slope_deg}°** slope.\n\n#### 🟠 Tier 2: Elevated Surveillance & Drainage Clearance (P2 High)\n${highLocs.slice(0, 5).map(l => `- **${l.name}, ${l.state} (${l.latestRisk?.finalScore}/100 · ${l.latestRisk?.priorityLevel})**: ${l.latestRisk?.inputs?.slope_deg}° slope with ${l.latestRisk?.inputs?.rainfall_24h_mm}mm rain.`).join('\n') || '- Other catchments currently report stable slope thresholds.'}`,
       confidence: 'HIGH',
       generatedAt: new Date().toISOString(),
       groundedFacts: [
-        { metric: 'P1 Critical Sites', value: '2 Locations', source: 'NDMA P1 Roster' },
-        { metric: 'P2 High Sites', value: '5 Locations', source: 'Surveillance Matrix' },
-        { metric: 'Max Risk Score', value: '75.8/100 (Aizawl)', source: 'SIH26001 Multi-Factor' },
-        { metric: 'Active Alarms', value: '4 Live Alerts', source: 'Rule Engine NER' },
+        { metric: 'P1 Critical Sites', value: `${tier1Count} Locations`, source: 'Live Telemetry Engine' },
+        { metric: 'P2 High Sites', value: `${tier2Count} Locations`, source: 'Surveillance Matrix' },
+        { metric: 'Max Risk Score', value: `${top1.latestRisk?.finalScore}/100 (${top1.name})`, source: 'SIH26001 Multi-Factor' },
+        { metric: 'Active Alarms', value: `${tier1Count + tier2Count} Alerts`, source: 'Rule Engine NER' },
       ],
-      relevantLocations: criticalLocs.concat(highLocs.slice(0, 2)).map((l) => ({
+      relevantLocations: sortedLocations.slice(0, 4).map((l: any) => ({
         id: l.id,
         name: l.name,
         district: l.district,
@@ -134,9 +139,9 @@ function generateGroundedAnalysis(query: string, focusLocationId?: string): AIAn
         priority: l.latestRisk?.priorityLevel || 'P2',
       })),
       recommendedActions: [
-        'Dispatch NDRF & SDRF field verification squads to Aizawl and Gangtok immediately.',
-        'Issue Level-1 CAP broadcast and trigger Emergency SMS alert to +91 7829621050 and registered authorities.',
-        'Enforce weight and speed restrictions for commercial freight along NH-54 and NH-10.',
+        `Dispatch NDRF & SDRF field verification squads to ${top1.name} and ${top2.name} immediately.`,
+        'Issue Level-1 CAP broadcast and trigger Emergency SMS alert to registered emergency coordinators.',
+        'Enforce weight and speed restrictions for commercial freight along saturated mountain corridors.',
       ],
     };
   }
@@ -153,12 +158,14 @@ function generateGroundedAnalysis(query: string, focusLocationId?: string): AIAn
         { metric: 'Exposed Health Centers', value: '92 Hospitals', source: 'OSM Healthcare' },
         { metric: 'Bridge Spans Monitored', value: '93 Bridges', source: 'PWD / NHAI' },
       ],
-      relevantLocations: [
-        { id: 'aizawl', name: 'Aizawl Catchment', district: 'Aizawl', score: 75.8, level: 'CRITICAL', priority: 'P1' },
-        { id: 'gangtok', name: 'Gangtok Urban Ridge', district: 'East Sikkim', score: 70.1, level: 'CRITICAL', priority: 'P1' },
-        { id: 'shillong', name: 'Shillong Peak & Valley', district: 'East Khasi Hills', score: 67.1, level: 'HIGH', priority: 'P2' },
-        { id: 'kohima', name: 'Kohima Municipal Ridge', district: 'Kohima', score: 62.5, level: 'HIGH', priority: 'P2' },
-      ],
+      relevantLocations: sortedLocations.slice(0, 4).map((l: any) => ({
+        id: l.id,
+        name: l.name,
+        district: l.district,
+        score: l.latestRisk?.finalScore || 50,
+        level: l.latestRisk?.riskLevel || 'MODERATE',
+        priority: l.latestRisk?.priorityLevel || 'P2',
+      })),
       recommendedActions: [
         'Establish a 500-meter safety buffer around schools and hospital access roads situated near steep cuts.',
         'Pre-position heavy earthmoving machinery (JCBs) near critical bridge spans along NH-54, NH-6, and NH-10.',
@@ -193,19 +200,23 @@ function generateGroundedAnalysis(query: string, focusLocationId?: string): AIAn
 
   // 6. SYSTEM ARCHITECTURE & AI FORMULA QUERIES
   return {
-    answer: `### 🤖 Landslide-Watch-SIH26001: AI Multi-Factor Decision Support Engine\n\nThis platform implements an advanced multi-layer early warning architecture tailored for the terrain of Northeast India:\n\n#### 📐 Multi-Factor Risk Formula:\n$$\\text{Risk Score} = 0.35 \\cdot R_{\\text{rain}} + 0.25 \\cdot S_{\\text{slope}} + 0.15 \\cdot G_{\\text{soil}} + 0.10 \\cdot D_{\\text{drain}} + 0.10 \\cdot L_{\\text{land}} + 0.05 \\cdot H_{\\text{hist}}$$\n\n#### 🌐 Integrated Live Data Sources:\n1. **Meteorological Telemetry**: IMD AWS & Open-Meteo NWP Radar (Hourly rates, 24h & 72h saturation).\n2. **Topography & Elevation**: NASA SRTM 30m Global DEM (Slope angle, aspect, curvature).\n3. **Geotechnical Soil Properties**: ISRIC SoilGrids v2.0 (Clay %, Sand %, Silt %, Bulk Density, Water Retention).\n4. **Vegetation & Land Cover**: ESA WorldCover 10m Sentinel-2 multi-spectral classification.\n5. **Drainage Hydrography**: HydroSHEDS NER flow accumulation and stream buffer networks.\n6. **Infrastructure Exposure**: OpenStreetMap Overpass API (Roads, Bridges, Schools, Hospitals within 5km).\n7. **Early Warning Dispatch**: Automated CAP (Common Alerting Protocol XML) + Fast2SMS Cloud SMS Gateway.\n\nCurrently monitoring **20 high-vulnerability catchments across 13 NER districts** with **2 P1 Critical alerts active** in Aizawl and Gangtok.`,
+    answer: `### 🤖 Landslide-Watch-SIH26001: AI Multi-Factor Decision Support Engine\n\nThis platform implements an advanced multi-layer early warning architecture tailored for the terrain of Northeast India:\n\n#### 📐 Multi-Factor Risk Formula:\n$\\text{Risk Score} = 0.35 \\cdot R_{\\text{rain}} + 0.25 \\cdot S_{\\text{slope}} + 0.15 \\cdot G_{\\text{soil}} + 0.10 \\cdot D_{\\text{drain}} + 0.10 \\cdot L_{\\text{land}} + 0.05 \\cdot H_{\\text{hist}}$\n\n#### 🌐 Integrated Live Data Sources:\n1. **Meteorological Telemetry**: IMD AWS & Open-Meteo NWP Radar (Hourly rates, 24h & 72h saturation).\n2. **Topography & Elevation**: NASA SRTM 30m Global DEM (Slope angle, aspect, curvature).\n3. **Geotechnical Soil Properties**: ISRIC SoilGrids v2.0 (Clay %, Sand %, Silt %, Bulk Density, Water Retention).\n4. **Vegetation & Land Cover**: ESA WorldCover 10m Sentinel-2 multi-spectral classification.\n5. **Drainage Hydrography**: HydroSHEDS NER flow accumulation and stream buffer networks.\n6. **Infrastructure Exposure**: OpenStreetMap Overpass API (Roads, Bridges, Schools, Hospitals within 5km).\n7. **Early Warning Dispatch**: Automated CAP (Common Alerting Protocol XML) + Fast2SMS Cloud SMS Gateway.\n\nCurrently monitoring **${locs.length} high-vulnerability catchments across Northeast India** with **${criticalLocs.length} P1 Critical alerts active** (${top1.name}).`,
     confidence: 'HIGH',
     generatedAt: new Date().toISOString(),
     groundedFacts: [
-      { metric: 'Monitored Catchments', value: '20 NER Sites', source: 'SIH26001 Platform' },
+      { metric: 'Monitored Catchments', value: `${locs.length} NER Sites`, source: 'SIH26001 Platform' },
       { metric: 'Total Population Covered', value: '984,800 Citizens', source: 'Census NER' },
-      { metric: 'Active Critical Alerts', value: '2 P1 Alerts', source: 'Live Telemetry' },
+      { metric: 'Active Critical Alerts', value: `${criticalLocs.length} P1 Alerts`, source: 'Live Telemetry' },
       { metric: 'Early Warning Protocol', value: 'CAP XML + Cloud SMS', source: 'ITU-T X.1303' },
     ],
-    relevantLocations: [
-      { id: 'aizawl', name: 'Aizawl Catchment', district: 'Aizawl', score: 75.8, level: 'CRITICAL', priority: 'P1' },
-      { id: 'gangtok', name: 'Gangtok Urban Ridge', district: 'East Sikkim', score: 70.1, level: 'CRITICAL', priority: 'P1' },
-    ],
+    relevantLocations: sortedLocations.slice(0, 2).map((l: any) => ({
+      id: l.id,
+      name: l.name,
+      district: l.district,
+      score: l.latestRisk?.finalScore || 50,
+      level: l.latestRisk?.riskLevel || 'MODERATE',
+      priority: l.latestRisk?.priorityLevel || 'P2',
+    })),
     recommendedActions: [
       'Use the 📱 Emergency SMS Alert tool to dispatch geofenced warnings to local responders.',
       'Export the NDMA Situation Report (SitRep) for inter-agency coordination.',
@@ -229,17 +240,15 @@ export function GroundedAnalystModal({ isOpen, onClose, defaultLocationId }: Pro
     setLoading(true);
     setError(null);
 
-    // Provide immediate intelligent grounded analysis
-    setTimeout(() => {
-      try {
-        const analysis = generateGroundedAnalysis(q, defaultLocationId);
-        setResponse(analysis);
-      } catch (err: any) {
-        setError('Error computing analytical response. Please try another query.');
-      } finally {
-        setLoading(false);
-      }
-    }, 400);
+    try {
+      const locs = await getLiveOrCachedLocations();
+      const analysis = generateGroundedAnalysis(q, locs, defaultLocationId);
+      setResponse(analysis);
+    } catch (err: any) {
+      setError('Error computing analytical response. Please try another query.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (

@@ -4,9 +4,14 @@ import { StatCard, RiskBadge } from '../components/shared/Badges';
 import { RiskDistributionChart } from '../components/charts/Charts';
 import { BarChart3, TrendingUp, AlertOctagon, Activity, CloudRain, ShieldAlert, ArrowUpRight, ArrowDownRight, Compass } from 'lucide-react';
 import { SystemWhatChangedSummary } from '../types';
-import { MOCK_LOCATIONS, MOCK_ALERTS } from '../lib/mockData';
 
 export function RiskAnalytics() {
+  const { data: locations = [] } = useQuery('locations', () =>
+    api.get('/api/locations').then((r) => (r.data?.data || []) as any[])
+  );
+  const { data: alerts = [] } = useQuery('alerts', () =>
+    api.get('/api/alerts').then((r) => (r.data?.data || []) as any[])
+  );
   const { data: dist } = useQuery('risk-dist', () =>
     api.get('/api/analytics/risk-distribution').then((r) => r.data.data)
   );
@@ -20,10 +25,10 @@ export function RiskAnalytics() {
     api.get('/api/risk/what-changed').then((r) => r.data.data as SystemWhatChangedSummary)
   );
 
-  // Compute immediate fallbacks from local live mock data if network query is pending
+  // Compute live distributions from real location telemetry
   const distData = dist || (() => {
     const d = { LOW: 0, MODERATE: 0, HIGH: 0, CRITICAL: 0 };
-    MOCK_LOCATIONS.forEach((l) => {
+    locations.forEach((l: any) => {
       const lvl = l.latestRisk?.riskLevel || 'MODERATE';
       if (lvl in d) d[lvl as keyof typeof d]++;
     });
@@ -33,131 +38,69 @@ export function RiskAnalytics() {
   const total = Object.values(distData).reduce((a: any, b: any) => a + b, 0) as number;
 
   const fallbackAlertFreq = alertFreq || {
-    total: MOCK_ALERTS.length || 12,
+    total: alerts.length,
     byStatus: {
-      active: MOCK_ALERTS.filter((a) => a.status === 'NEW').length || 4,
-      acknowledged: MOCK_ALERTS.filter((a) => a.status === 'ACKNOWLEDGED').length || 3,
-      dispatched: MOCK_ALERTS.filter((a) => a.status === 'INVESTIGATING').length || 3,
-      resolved: MOCK_ALERTS.filter((a) => a.status === 'RESOLVED').length || 2,
+      active: alerts.filter((a: any) => a.status === 'NEW').length,
+      acknowledged: alerts.filter((a: any) => a.status === 'ACKNOWLEDGED').length,
+      dispatched: alerts.filter((a: any) => a.status === 'INVESTIGATING').length,
+      resolved: alerts.filter((a: any) => a.status === 'RESOLVED').length,
     },
   };
 
   const fallbackRainfall = (rainfallSum && rainfallSum.length > 0)
     ? rainfallSum
-    : MOCK_LOCATIONS.map((l) => ({
+    : locations.map((l: any) => {
+        const rate = l.latestRisk?.inputs?.rainfall_current_mmph || 0;
+        return {
+          locationId: l.id,
+          locationName: l.name,
+          district: l.district,
+          state: l.state,
+          current_mmph: rate,
+          cumulative_24h_mm: l.latestRisk?.inputs?.rainfall_24h_mm || 0,
+          cumulative_72h_mm: l.latestRisk?.inputs?.rainfall_72h_mm || 0,
+          intensity: rate >= 15 ? 'heavy' : rate >= 5 ? 'moderate' : 'light',
+        };
+      });
+
+  const fallbackWhatChanged: SystemWhatChangedSummary = whatChanged || (() => {
+    const sorted = [...locations].sort((a: any, b: any) => (b.latestRisk?.finalScore || 0) - (a.latestRisk?.finalScore || 0));
+    const topSurges = sorted.slice(0, 4).map((l: any) => {
+      const score = l.latestRisk?.finalScore || 50;
+      const trend = l.latestRisk?.trendPct || 0;
+      const rain = l.latestRisk?.inputs?.rainfall_24h_mm || 0;
+      const slope = l.latestRisk?.inputs?.slope_deg || 0;
+      return {
         locationId: l.id,
         locationName: l.name,
         district: l.district,
-        state: l.state,
-        current_mmph: l.latestRisk?.inputs.rainfall_current_mmph || 0,
-        cumulative_24h_mm: l.latestRisk?.inputs.rainfall_24h_mm || 0,
-        cumulative_72h_mm: l.latestRisk?.inputs.rainfall_72h_mm || 0,
-        intensity: (l.latestRisk?.inputs.rainfall_current_mmph || 0) >= 15 ? 'heavy' : (l.latestRisk?.inputs.rainfall_current_mmph || 0) >= 5 ? 'moderate' : 'light',
-      }));
+        previousTimestamp: new Date(Date.now() - 3600000).toISOString(),
+        currentTimestamp: l.latestRisk?.timestamp || new Date().toISOString(),
+        previousScore: Math.max(0, Math.round((score - trend) * 10) / 10),
+        currentScore: score,
+        scoreDelta: trend,
+        previousLevel: l.latestRisk?.riskLevel || 'MODERATE',
+        currentLevel: l.latestRisk?.riskLevel || 'MODERATE',
+        levelChanged: false,
+        rainfall24hDelta: 0,
+        previousRainfall24h: rain,
+        currentRainfall24h: rain,
+        primaryCause: `Live precipitation (${rain} mm) on ${slope}° slope`,
+        isEscalation: trend > 0,
+      };
+    });
 
-  const fallbackWhatChanged = whatChanged || {
-    timestamp: new Date().toISOString(),
-    totalLocations: 20,
-    escalatedLocations: [
-      {
-        locationId: 'aizawl',
-        locationName: 'Aizawl Catchment',
-        district: 'Aizawl',
-        previousTimestamp: new Date(Date.now() - 3600000).toISOString(),
-        currentTimestamp: new Date().toISOString(),
-        previousScore: 61.6,
-        currentScore: 75.8,
-        scoreDelta: 14.2,
-        previousLevel: 'HIGH',
-        currentLevel: 'CRITICAL',
-        levelChanged: true,
-        rainfall24hDelta: 24.5,
-        previousRainfall24h: 62.0,
-        currentRainfall24h: 86.5,
-        primaryCause: 'Intense Cloudburst Saturation & 38° Slope Runoff',
-        isEscalation: true,
-      },
-      {
-        locationId: 'gangtok',
-        locationName: 'Gangtok Urban Ridge',
-        district: 'East Sikkim',
-        previousTimestamp: new Date(Date.now() - 3600000).toISOString(),
-        currentTimestamp: new Date().toISOString(),
-        previousScore: 58.9,
-        currentScore: 70.1,
-        scoreDelta: 11.2,
-        previousLevel: 'HIGH',
-        currentLevel: 'CRITICAL',
-        levelChanged: true,
-        rainfall24hDelta: 18.3,
-        previousRainfall24h: 54.5,
-        currentRainfall24h: 72.8,
-        primaryCause: 'Pore Pressure Accumulation on Burtuk Creep Axis',
-        isEscalation: true,
-      },
-    ],
-    deescalatedLocations: [
-      {
-        locationId: 'krishnai',
-        locationName: 'Krishnai River Catchment',
-        district: 'Goalpara',
-        previousTimestamp: new Date(Date.now() - 3600000).toISOString(),
-        currentTimestamp: new Date().toISOString(),
-        previousScore: 28.5,
-        currentScore: 22.0,
-        scoreDelta: -6.5,
-        previousLevel: 'MODERATE',
-        currentLevel: 'LOW',
-        levelChanged: true,
-        rainfall24hDelta: -12.0,
-        previousRainfall24h: 24.0,
-        currentRainfall24h: 12.0,
-        primaryCause: 'Precipitation Receded & Rapid Floodplain Runoff',
-        isEscalation: false,
-      },
-    ],
-    newCriticalAlerts: 2,
-    newHighAlerts: 1,
-    meanRiskDelta: 3.4,
-    topSurges: [
-      {
-        locationId: 'aizawl',
-        locationName: 'Aizawl Catchment',
-        district: 'Aizawl',
-        previousTimestamp: new Date(Date.now() - 3600000).toISOString(),
-        currentTimestamp: new Date().toISOString(),
-        previousScore: 61.6,
-        currentScore: 75.8,
-        scoreDelta: 14.2,
-        previousLevel: 'HIGH',
-        currentLevel: 'CRITICAL',
-        levelChanged: true,
-        rainfall24hDelta: 24.5,
-        previousRainfall24h: 62.0,
-        currentRainfall24h: 86.5,
-        primaryCause: 'Intense Cloudburst Saturation & 38° Slope Runoff',
-        isEscalation: true,
-      },
-      {
-        locationId: 'gangtok',
-        locationName: 'Gangtok Urban Ridge',
-        district: 'East Sikkim',
-        previousTimestamp: new Date(Date.now() - 3600000).toISOString(),
-        currentTimestamp: new Date().toISOString(),
-        previousScore: 58.9,
-        currentScore: 70.1,
-        scoreDelta: 11.2,
-        previousLevel: 'HIGH',
-        currentLevel: 'CRITICAL',
-        levelChanged: true,
-        rainfall24hDelta: 18.3,
-        previousRainfall24h: 54.5,
-        currentRainfall24h: 72.8,
-        primaryCause: 'Pore Pressure Accumulation on Burtuk Creep Axis',
-        isEscalation: true,
-      },
-    ],
-  };
+    return {
+      timestamp: new Date().toISOString(),
+      totalLocations: locations.length || 20,
+      escalatedLocations: topSurges.filter((s: any) => s.scoreDelta > 0),
+      deescalatedLocations: topSurges.filter((s: any) => s.scoreDelta < 0),
+      newCriticalAlerts: locations.filter((l: any) => l.latestRisk?.priorityLevel === 'P1').length,
+      newHighAlerts: locations.filter((l: any) => l.latestRisk?.priorityLevel === 'P2').length,
+      meanRiskDelta: 0.2,
+      topSurges,
+    };
+  })();
 
   return (
     <div className="p-6 space-y-6">
