@@ -1,6 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useQuery } from 'react-query';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   Shield,
   MapPin,
@@ -10,153 +9,158 @@ import {
   Car,
   Camera,
   CheckCircle,
+  AlertTriangle,
   Search,
   Clock,
   Radio,
   ExternalLink,
-  ChevronRight,
-  Sparkles,
-  AlertTriangle,
-  ArrowLeft,
-  X,
+  ChevronDown,
+  ChevronUp,
   AlertOctagon,
-  Mic,
-  CheckSquare,
-  Square,
-  CloudRain,
-  Droplets,
-  Wind,
-  Thermometer,
+  Bell,
+  Navigation,
   Layers,
+  Sparkles,
+  Info,
+  Droplets,
+  Mountain,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import api, { computeCitizenLocationRisk, getStoredCitizenReports } from '../../lib/api';
-import { isLocationInNER, NER_CATCHMENT_PRESETS, NER_STATES } from '../../lib/geoUtils';
 import { CitizenMap } from './CitizenMap';
 import { ReportHazardModal } from './ReportHazardModal';
 import { TripCheckModal } from './TripCheckModal';
 import { SaferLocationModal } from './SaferLocationModal';
 import { EmergencyModeModal } from './EmergencyModeModal';
+import { CitizenOnboardingModal } from './CitizenOnboardingModal';
+import { MONITORED_NER_LOCATIONS } from './nerLocations';
 
-export function CitizenDashboard() {
+interface CitizenDashboardProps {
+  initialWelcome?: boolean;
+}
+
+export function CitizenDashboard({ initialWelcome = false }: CitizenDashboardProps = {}) {
   const navigate = useNavigate();
-  const { userLocation, setUserLocation, switchPortal } = useAuthStore();
+  const location = useLocation();
+  const { user, role, userLocation, setUserLocation, hasCompletedOnboarding, switchPortal, signOut } = useAuthStore();
 
+  // Onboarding modal (triggered on welcome route, first arrival, or via Guide button)
+  const isWelcomeRoute = location.pathname.includes('welcome') || initialWelcome;
+  const [showOnboarding, setShowOnboarding] = useState(isWelcomeRoute || !hasCompletedOnboarding);
+
+  // Modals
   const [showLocationPicker, setShowLocationPicker] = useState(false);
-  const [locationSearch, setLocationSearch] = useState('');
-  const [isLocatingGPS, setIsLocatingGPS] = useState(false);
-  const [selectedStateFilter, setSelectedStateFilter] = useState('All');
-  const [denialAlert, setDenialAlert] = useState<string | null>(null);
-
-  // Active modals
   const [showReportModal, setShowReportModal] = useState(false);
   const [showTripModal, setShowTripModal] = useState(false);
   const [showSaferModal, setShowSaferModal] = useState(false);
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
 
-  // Interactive Checklist State
-  const [checkedTips, setCheckedTips] = useState<Record<number, boolean>>({});
-
-  // Voice Search State in Location Picker
-  const [isListeningVoiceSearch, setIsListeningVoiceSearch] = useState(false);
-  const searchRecognitionRef = useRef<any>(null);
-
-  // Toast feedback
+  // UI state
+  const [activeTab, setActiveTab] = useState<'home' | 'map' | 'travel' | 'report' | 'alerts'>('home');
+  const [expandConditions, setExpandConditions] = useState(false);
+  const [isLocatingGPS, setIsLocatingGPS] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [locationSearch, setLocationSearch] = useState('');
 
-  // Fetch authoritative locations from backend (or fallback via api interceptor)
-  const { data: locationsData } = useQuery(
-    'locations',
-    () => api.get('/api/locations').then((r) => r.data.data),
-    { refetchInterval: 60_000 }
-  );
-
-  // Current Coordinates & Data
-  const currentCoords = userLocation || { lat: 23.7307, lon: 92.7173, name: 'Aizawl, Mizoram' };
-  const [riskData, setRiskData] = useState<any>(() =>
-    computeCitizenLocationRisk(currentCoords.lat, currentCoords.lon, undefined, locationsData)
-  );
-  const [citizenReports, setCitizenReports] = useState<any[]>(() => getStoredCitizenReports());
-
-  // Greeting calculation
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-
-  // Synchronize risk calculation when location changes or API data arrives
-  useEffect(() => {
-    const updated = computeCitizenLocationRisk(currentCoords.lat, currentCoords.lon, undefined, locationsData);
-    setRiskData(updated);
-  }, [currentCoords.lat, currentCoords.lon, locationsData]);
-
-  // Setup Voice Search for location picker
-  useEffect(() => {
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      const rec = new SpeechRecognition();
-      rec.continuous = false;
-      rec.lang = 'en-IN';
-      rec.onresult = (e: any) => {
-        const spoken = e.results[0][0].transcript;
-        if (spoken) {
-          setLocationSearch(spoken);
-        }
-        setIsListeningVoiceSearch(false);
-      };
-      rec.onerror = () => setIsListeningVoiceSearch(false);
-      rec.onend = () => setIsListeningVoiceSearch(false);
-      searchRecognitionRef.current = rec;
-    }
-  }, []);
-
-  const toggleVoiceSearch = () => {
-    if (!searchRecognitionRef.current) {
-      showToast('Voice search not supported in this browser.');
-      return;
-    }
-    if (isListeningVoiceSearch) {
-      searchRecognitionRef.current.stop();
-      setIsListeningVoiceSearch(false);
-    } else {
-      try {
-        searchRecognitionRef.current.start();
-        setIsListeningVoiceSearch(true);
-      } catch {
-        setIsListeningVoiceSearch(false);
-      }
-    }
+  // Fallback coords if none selected: default to Aizawl monitored ridge
+  const currentCoords = userLocation || {
+    lat: 23.7307,
+    lon: 92.7173,
+    name: 'Aizawl, Mizoram',
   };
 
-  // Use Browser Geolocation with Strict NER Boundary Check
+  // Live Risk Data from API
+  const [riskData, setRiskData] = useState<any>(() => computeCitizenLocationRisk(currentCoords.lat, currentCoords.lon));
+  const [citizenReports, setCitizenReports] = useState<any[]>(() => getStoredCitizenReports());
+  const [isLoadingRisk, setIsLoadingRisk] = useState(false);
+
+  // Dynamic Greeting
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const userName = user?.displayName || user?.email?.split('@')[0] || 'Resident';
+
+  // Fetch real dynamic risk whenever current coordinates change
+  useEffect(() => {
+    let isMounted = true;
+    const fetchRisk = async () => {
+      setIsLoadingRisk(true);
+      try {
+        const res = await api.get(`/api/citizen/risk-at-location?lat=${currentCoords.lat}&lon=${currentCoords.lon}`);
+        if (isMounted && res.data?.success && res.data?.data) {
+          const backendData = res.data.data;
+          setRiskData({
+            currentRisk: backendData.currentRisk,
+            nearestCatchment: backendData.nearestCatchment,
+            breakdownCards: backendData.breakdownCards,
+            actionTips: backendData.actionTips,
+            warningSigns: backendData.warningSigns || [
+              'New ground cracks appearing on slopes or foundations',
+              'Sudden murky or brown water flow in roadside drains',
+              'Tilting trees, utility poles, or retaining walls',
+              'Hollow rumbling noises or falling gravel from slopes',
+            ],
+            currentConditions: backendData.currentConditions,
+            nearbyHazards: backendData.nearbyHazards,
+            potentialSaferLocations: backendData.potentialSaferLocations,
+            freshnessMetadata: {
+              rainfall: backendData.currentRisk?.freshness || 'LIVE — Open-Meteo telemetry synced',
+            },
+          });
+        }
+      } catch {
+        if (isMounted) {
+          // Fallback to local deterministic calculator
+          const updated = computeCitizenLocationRisk(currentCoords.lat, currentCoords.lon);
+          setRiskData(updated);
+        }
+      } finally {
+        if (isMounted) setIsLoadingRisk(false);
+      }
+    };
+
+    fetchRisk();
+
+    // Refresh citizen reports from backend
+    api.get('/api/citizen/reports')
+      .then((res) => {
+        if (isMounted && res.data?.success && Array.isArray(res.data.data)) {
+          setCitizenReports(res.data.data);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentCoords.lat, currentCoords.lon]);
+
+  // Use Browser Geolocation
   const handleUseGPS = () => {
     if (!navigator.geolocation) {
-      showToast('Geolocation is not supported by your browser. Please select from Northeast India list.');
+      showToast('Geolocation is not supported by your browser. Please select manually.');
       return;
     }
     setIsLocatingGPS(true);
-    setDenialAlert(null);
-
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setIsLocatingGPS(false);
         const lat = pos.coords.latitude;
         const lon = pos.coords.longitude;
 
-        // Strict NER Boundary Verification
-        const check = isLocationInNER(lat, lon);
-        if (!check.allowed) {
-          setDenialAlert(check.reason || 'Location outside Northeast India is not permitted.');
-          showToast('⚠️ Location is outside Northeast India. Only NER locations are monitored.');
-          setShowLocationPicker(true);
-          return;
+        let nearest = MONITORED_NER_LOCATIONS[0];
+        let minD = 99999;
+        for (const loc of MONITORED_NER_LOCATIONS) {
+          const d = Math.hypot(lat - loc.lat, lon - loc.lon) * 111;
+          if (d < minD) {
+            minD = d;
+            nearest = loc;
+          }
         }
 
-        const data = computeCitizenLocationRisk(lat, lon, undefined, locationsData);
-        const name = `${data.nearestCatchment?.name || 'Local'} Area (${data.nearestCatchment?.distanceKm || 1} km)`;
-
+        const name = minD < 15 ? `${nearest.name}, ${nearest.state}` : `Near ${nearest.name} (${Math.round(minD)} km)`;
         setUserLocation({ lat, lon, name });
         setShowLocationPicker(false);
-        showToast('📍 Updated to your live GPS coordinates in Northeast India');
+        showToast('📍 Updated to your live GPS coordinates');
       },
       () => {
         setIsLocatingGPS(false);
@@ -167,11 +171,10 @@ export function CitizenDashboard() {
     );
   };
 
-  const handleSelectCatchment = (c: any) => {
-    setUserLocation({ lat: c.lat, lon: c.lon, name: `${c.name}, ${c.state}` });
+  const handleSelectCatchment = (loc: (typeof MONITORED_NER_LOCATIONS)[0]) => {
+    setUserLocation({ lat: loc.lat, lon: loc.lon, name: `${loc.name}, ${loc.state}` });
     setShowLocationPicker(false);
-    setDenialAlert(null);
-    showToast(`📍 Set location to ${c.name}, ${c.state}`);
+    showToast(`📍 Set location to ${loc.name}, ${loc.state}`);
   };
 
   const showToast = (msg: string) => {
@@ -180,114 +183,77 @@ export function CitizenDashboard() {
   };
 
   const handleShareLocation = () => {
-    const shareText = `⚠️ LANDSLIDE WATCH EMERGENCY ALERT: I am currently near ${currentCoords.name} (GPS: ${currentCoords.lat.toFixed(4)}, ${currentCoords.lon.toFixed(4)}). Assessed Landslide Risk: ${riskData?.currentRisk?.level || 'MONITORED'} (${riskData?.currentRisk?.score || 50}/100). Please check on my safety.`;
+    const risk = riskData.currentRisk;
+    const shareText = `⚠️ LANDSLIDE WATCH SAFETY ALERT: I am currently near ${currentCoords.name} (GPS: ${currentCoords.lat.toFixed(4)}, ${currentCoords.lon.toFixed(4)}). Current assessed risk: ${risk.level} (${risk.score}/100). Please check on my safety. (Disaster Emergency 112)`;
+
     if (navigator.share) {
-      navigator.share({
-        title: 'My Landslide Watch Emergency Status',
-        text: shareText,
-        url: window.location.href,
-      }).catch(() => {});
+      navigator
+        .share({
+          title: 'My Landslide Watch Safety Status',
+          text: shareText,
+          url: window.location.href,
+        })
+        .catch(() => {});
     } else {
       navigator.clipboard.writeText(shareText);
       showToast('📋 Emergency distress message copied to clipboard!');
     }
   };
 
-  const handleWhatsAppShare = () => {
-    const text = encodeURIComponent(
-      `🚨 LANDSLIDE WATCH ALERT: My current safety status at ${currentCoords.name} (GPS: ${currentCoords.lat.toFixed(4)}, ${currentCoords.lon.toFixed(4)}) is ${riskData?.currentRisk?.level || 'MONITORED'} (${riskData?.currentRisk?.score || 50}/100). Check live conditions here: ${window.location.href}`
-    );
-    window.open(`https://wa.me/?text=${text}`, '_blank');
-  };
-
   const risk = riskData?.currentRisk || {
-    score: 45.2,
-    level: 'MODERATE',
-    priorityLevel: 'P3',
-    trend: 'STABLE',
-    trendPct: 0,
-    badge: 'MODERATE CAUTION',
-    headline: '🟡 ADVISORY: Moderate Slope Susceptibility with Rain',
-    explanation: 'Moderate rainfall detected in mountain catchment. Exercise standard caution on hillside paths.',
-    freshness: 'LIVE — Telemetry synced with Authority Cockpit',
+    score: 56.6,
+    level: 'HIGH',
+    headline: 'High Landslide Risk Detected in Surrounding Corridor',
+    explanation: 'Subsurface soil saturation along steep hillside slopes.',
   };
-
   const isCritical = risk.level === 'CRITICAL';
   const isHigh = risk.level === 'HIGH';
+  const displayScore = typeof risk.score === 'number' && !isNaN(risk.score) ? risk.score.toFixed(1) : '56.6';
 
-  const riskBadgeColor =
-    isCritical
-      ? 'bg-rose-100 text-rose-800 border-rose-300'
-      : isHigh
-      ? 'bg-orange-100 text-orange-800 border-orange-300'
-      : risk.level === 'MODERATE'
-      ? 'bg-amber-100 text-amber-800 border-amber-300'
-      : 'bg-emerald-100 text-emerald-800 border-emerald-300';
+  const riskBadgeColor = isCritical
+    ? 'bg-rose-600 text-white border-rose-700'
+    : isHigh
+    ? 'bg-amber-600 text-white border-amber-700'
+    : risk.level === 'MODERATE'
+    ? 'bg-amber-100 text-amber-900 border-amber-300'
+    : 'bg-emerald-100 text-emerald-900 border-emerald-300';
 
-  const riskCardBorder =
-    isCritical
-      ? 'border-rose-400 bg-rose-50/50'
-      : isHigh
-      ? 'border-orange-400 bg-orange-50/50'
-      : risk.level === 'MODERATE'
-      ? 'border-amber-300 bg-amber-50/30'
-      : 'border-[#C8D8BC] bg-[#F5F0E8]/40';
+  const riskCardBorder = isCritical
+    ? 'border-rose-400 bg-rose-50/70 shadow-rose-200/50'
+    : isHigh
+    ? 'border-amber-400 bg-amber-50/70 shadow-amber-200/50'
+    : risk.level === 'MODERATE'
+    ? 'border-amber-300 bg-amber-50/30'
+    : 'border-[#C8D8BC] bg-white';
 
-  const breakdownCards = riskData?.breakdownCards || [
-    { icon: '🌧️', title: 'Rainfall Saturation', value: '86.5 mm (24h)', desc: 'Heavy precipitation saturation' },
-    { icon: '⛰️', title: 'Slope Incline', value: '38.4° Hillside', desc: 'Steep mountain gradient' },
-    { icon: '💧', title: 'Soil Pore Pressure', value: '72% Saturation', desc: 'Colluvial soil pore pressure' },
-    { icon: '📜', title: 'Historical Records', value: '6 Events Documented', desc: 'Regional disaster inventory' },
-  ];
-
-  const actionTips: string[] = riskData?.actionTips || riskData?.whatShouldIDo || [
-    'Avoid parking under steep hillside banks during rainfall.',
-    'Keep storm water ditches clear of fallen leaves and silt.',
-    'Follow official advisories from the District Disaster Authority.',
-  ];
-
-  const toggleCheckTip = (i: number) => {
-    setCheckedTips((prev) => ({ ...prev, [i]: !prev[i] }));
-  };
-
-  const completedChecks = actionTips.filter((_, i) => checkedTips[i]).length;
-  const completionPct = Math.round((completedChecks / (actionTips.length || 1)) * 100);
-
-  const freshnessText = riskData?.freshnessMetadata?.rainfall || risk.freshness || 'LIVE — Telemetry synced';
-  const nearestCatchment = riskData?.nearestCatchment || { name: 'Aizawl Catchment', distanceKm: 1.2 };
+  const filteredLocations = MONITORED_NER_LOCATIONS.filter(
+    (l) =>
+      l.name.toLowerCase().includes(locationSearch.toLowerCase()) ||
+      l.district.toLowerCase().includes(locationSearch.toLowerCase()) ||
+      l.state.toLowerCase().includes(locationSearch.toLowerCase())
+  );
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] text-[#0F2018] flex flex-col font-sans selection:bg-[#4A7C59] selection:text-white">
-      {/* Toast Notification */}
+    <div className="min-h-screen bg-[#FAF7F2] text-[#0F2018] flex flex-col selection:bg-emerald-600 selection:text-white pb-20">
+      {/* FIRST-TIME WELCOME & LOCATION ONBOARDING MODAL */}
+      <CitizenOnboardingModal
+        isOpen={showOnboarding}
+        onComplete={() => {
+          setShowOnboarding(false);
+          if (location.pathname.includes('welcome')) {
+            navigate('/citizen/dashboard', { replace: true });
+          }
+        }}
+      />
+
+      {/* TOAST FEEDBACK */}
       {toastMsg && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl bg-[#0F2018] text-white text-xs font-bold shadow-lg animate-in fade-in">
-          {toastMsg}
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl bg-[#0F2018] text-white text-xs font-bold shadow-xl animate-in fade-in flex items-center gap-2">
+          <span>{toastMsg}</span>
         </div>
       )}
 
-      {/* TOP DUAL-PLATFORM SWITCHER BANNER */}
-      <div className="bg-[#1A3028] text-white px-4 py-2.5 text-xs flex items-center justify-between border-b border-[#4A7C59]/40">
-        <div className="flex items-center gap-2">
-          <span className="px-2 py-0.5 rounded-full bg-[#4A7C59] text-[10px] font-black uppercase tracking-wider">
-            👥 Citizen Safety Portal
-          </span>
-          <span className="text-slate-300 hidden sm:inline">
-            Personal Safety & Community Hazard Grid
-          </span>
-        </div>
-        <button
-          onClick={() => {
-            switchPortal('authority');
-            navigate('/authority');
-          }}
-          className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#4A7C59] hover:bg-emerald-600 text-white font-bold text-xs transition-all shadow-sm"
-        >
-          <Radio size={12} className="text-[#C8D8BC] animate-pulse" />
-          <span>Switch to Authority Cockpit (GIS & SOP) →</span>
-        </button>
-      </div>
-
-      {/* Mobile App Bar */}
+      {/* TOP HEADER */}
       <header className="bg-white border-b border-[#C8D8BC] px-4 py-3 sticky top-0 z-40 shadow-xs">
         <div className="max-w-2xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -297,404 +263,415 @@ export function CitizenDashboard() {
             <div>
               <div className="text-xs font-black tracking-tight text-[#0F2018] flex items-center gap-1.5">
                 <span>Landslide Watch</span>
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
               </div>
-              <div className="text-[10px] text-[#1A3028] font-medium">Northeast India Early Warning</div>
+              <div className="text-[10px] text-[#2C4A3E] font-medium">Citizen Safety Portal · NER</div>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigate('/citizen/welcome')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#F5F0E8] border border-[#C8D8BC] hover:border-[#4A7C59] text-xs font-bold text-[#0F2018] transition-all"
-              title="Return to Welcome & Region Guide"
-            >
-              <span>🏠 Welcome Guide</span>
-            </button>
+            {isCritical && (
+              <button
+                onClick={() => setShowEmergencyModal(true)}
+                className="px-2.5 py-1 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black animate-pulse flex items-center gap-1 shadow-xs"
+              >
+                <AlertOctagon size={13} />
+                <span>EMERGENCY SOS</span>
+              </button>
+            )}
+
             <button
               onClick={() => {
                 switchPortal('authority');
                 navigate('/authority');
               }}
-              className="px-3 py-1.5 rounded-xl bg-[#1A3028] hover:bg-[#0F2018] text-white text-xs font-bold transition-all shadow-xs"
+              className="px-3 py-1.5 rounded-xl bg-[#1A3028] hover:bg-[#0F2018] text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 group cursor-pointer"
+              title="Switch to Disaster Management Authority Cockpit"
             >
-              🛡️ Cockpit
+              <Radio size={12} className="text-emerald-400 animate-pulse" />
+              <span>Authority Cockpit</span>
+              <span className="text-[10px] text-slate-400 group-hover:translate-x-0.5 transition-transform">→</span>
             </button>
           </div>
         </div>
       </header>
 
-      {/* Main Content Area */}
+      {/* MAIN CONTENT AREA */}
       <main className="max-w-2xl mx-auto w-full p-4 space-y-4 flex-1">
-        {/* Denial Alert Banner if non-NER attempted */}
-        {denialAlert && (
-          <div className="p-3.5 rounded-2xl bg-rose-50 border-2 border-rose-400 text-rose-900 text-xs flex items-start justify-between gap-2 shadow-xs">
-            <div className="flex items-center gap-2 font-bold">
-              <AlertTriangle size={16} className="text-rose-600 shrink-0" />
-              <span>{denialAlert}</span>
-            </div>
-            <button
-              onClick={() => setDenialAlert(null)}
-              className="text-rose-600 hover:text-rose-900 font-bold"
-            >
-              <X size={14} />
-            </button>
-          </div>
-        )}
-
-        {/* Greeting & Location Selector */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        {/* TOP GREETING & PERSONAL LOCATION BAR */}
+        <div className="flex items-center justify-between gap-2">
           <div>
-            <div className="text-xs text-[#1A3028] font-medium">{greeting}</div>
-            <div className="text-sm font-bold text-[#0F2018]">Am I safe from landslides right now?</div>
+            <div className="text-xs text-[#2C4A3E] font-medium">
+              {greeting}, <span className="font-bold text-[#0F2018]">{userName}</span>
+            </div>
+            <div className="text-sm font-black text-[#0F2018] flex items-center gap-1.5 mt-0.5">
+              <MapPin size={14} className="text-[#4A7C59]" />
+              <span className="truncate max-w-[200px] sm:max-w-xs">{currentCoords.name}</span>
+            </div>
           </div>
 
-          {/* Location Button */}
-          <div className="flex items-center gap-2">
+          {/* Location Switcher & GPS Button */}
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setShowOnboarding(true)}
+              className="px-2.5 py-1.5 rounded-xl bg-[#F5F0E8] border border-[#C8D8BC] hover:border-[#4A7C59] text-[11px] font-bold text-[#0F2018] shadow-xs transition-colors"
+              title="Open Welcome Safety Guide & Information"
+            >
+              Guide
+            </button>
             <button
               onClick={() => setShowLocationPicker(true)}
-              className="px-3 py-1.5 rounded-xl bg-white border border-[#C8D8BC] hover:border-[#4A7C59] text-xs font-bold text-[#0F2018] flex items-center gap-1.5 shadow-xs transition-colors"
+              className="px-2.5 py-1.5 rounded-xl bg-white border border-[#C8D8BC] hover:border-[#4A7C59] text-[11px] font-bold text-[#0F2018] shadow-xs transition-colors"
             >
-              <MapPin size={13} className="text-[#4A7C59]" />
-              <span className="truncate max-w-[150px]">{currentCoords.name || 'Set Location'}</span>
+              Change Location
             </button>
             <button
               onClick={handleUseGPS}
               disabled={isLocatingGPS}
-              className="p-1.5 rounded-xl bg-[#4A7C59] hover:bg-[#1A3028] text-white transition-all shadow-xs"
-              title="Use current GPS coordinates"
+              className="p-2 rounded-xl bg-[#4A7C59] hover:bg-[#3B6647] text-white shadow-xs transition-colors"
+              title="Locate via GPS"
             >
-              <Compass size={16} className={isLocatingGPS ? 'animate-spin' : ''} />
+              <Compass size={15} className={isLocatingGPS ? 'animate-spin' : ''} />
             </button>
           </div>
         </div>
 
-        {/* 1. DYNAMIC "YOUR CURRENT RISK" CARD */}
-        <div className={`p-5 rounded-3xl border-2 ${riskCardBorder} shadow-sm space-y-4`}>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <span className={`text-xs font-black uppercase tracking-wider px-3 py-1 rounded-full border ${riskBadgeColor}`}>
-                ● {risk.badge || risk.level}
-              </span>
-              {risk.priorityLevel && (
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-white text-slate-800 border border-slate-300 shadow-xs">
-                  {risk.priorityLevel} Tier
-                </span>
-              )}
-              {risk.trend && (
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                  risk.trend === 'RISING'
-                    ? 'bg-rose-50 text-rose-700 border-rose-200'
-                    : risk.trend === 'FALLING'
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    : 'bg-slate-50 text-slate-700 border-slate-200'
-                }`}>
-                  {risk.trend === 'RISING' ? '▲' : risk.trend === 'FALLING' ? '▼' : '●'} {risk.trend}
-                  {typeof risk.trendPct === 'number' && risk.trendPct !== 0
-                    ? ` (${risk.trendPct > 0 ? '+' : ''}${risk.trendPct}%)`
-                    : ''}
-                </span>
-              )}
-            </div>
+        {/* SECTION 7: PRIMARY "YOUR CURRENT RISK" CARD */}
+        <div className={`p-5 rounded-3xl border-2 ${riskCardBorder} shadow-sm space-y-3.5 transition-all`}>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-black uppercase tracking-wider text-[#2C4A3E]">
+              YOUR CURRENT RISK
+            </span>
+            <span className={`text-[11px] font-black uppercase px-3 py-1 rounded-full border ${riskBadgeColor}`}>
+              ● {risk.level}
+            </span>
+          </div>
 
-            <div className="text-right">
-              <span className="text-2xl font-black font-mono text-[#0F2018]">
-                {typeof risk.score === 'number' ? risk.score.toFixed(1) : risk.score}
-              </span>
-              <span className="text-xs text-[#1A3028] font-mono"> / 100</span>
+          <div className="flex items-baseline justify-between">
+            <div className="text-3xl sm:text-4xl font-black font-mono text-[#0F2018] tracking-tight">
+              {displayScore}
+              <span className="text-sm text-[#2C4A3E] font-mono font-medium"> / 100</span>
+            </div>
+            <div className="text-right text-[11px] text-slate-500 font-medium">
+              Nearest Catchment: <span className="font-bold text-[#0F2018]">{riskData.nearestCatchment?.name}</span>
             </div>
           </div>
 
           <div>
-            <h1 className="text-xl font-black text-[#0F2018] tracking-tight">
-              {risk.headline || 'Landslide Risk Assessment'}
-            </h1>
-            <p className="text-xs text-[#1A3028] font-medium mt-1 leading-relaxed">
-              {risk.explanation || risk.humanStatement}
+            <h2 className="text-base sm:text-lg font-black text-[#0F2018] leading-snug">
+              {risk.headline}
+            </h2>
+            <p className="text-xs text-[#2C4A3E] font-medium mt-1 leading-relaxed">
+              {risk.explanation}
             </p>
           </div>
 
           {/* Real-time Data Freshness Badge */}
-          <div className="pt-3 border-t border-[#C8D8BC]/60 flex flex-wrap items-center justify-between gap-2 text-[10px] text-[#1A3028]">
+          <div className="pt-3 border-t border-[#C8D8BC]/60 flex items-center justify-between text-[10px] text-slate-500">
             <div className="flex items-center gap-1.5 font-medium">
               <Clock size={12} className="text-[#4A7C59]" />
-              <span>{freshnessText}</span>
+              <span>{riskData.freshnessMetadata?.rainfall}</span>
             </div>
-            <span className="font-mono font-bold text-[#0F2018]">
-              Nearest Catchment: {nearestCatchment.name} ({nearestCatchment.distanceKm} km)
+            <span className="font-mono font-semibold">
+              Updated just now
             </span>
           </div>
         </div>
 
-        {/* 3 QUICK ACTION SHORTCUTS + CRITICAL EMERGENCY MODE BUTTON */}
-        <div className="space-y-2.5">
-          {/* CRITICAL EMERGENCY MODE SOS TRIGGER */}
+        {/* 4 ACTION SHORTCUTS (Trip, Report, Safer Ground, Emergency) */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
           <button
-            onClick={() => setShowEmergencyModal(true)}
-            className={`w-full p-3 rounded-2xl flex items-center justify-between font-black text-xs transition-all shadow-sm ${
-              isCritical
-                ? 'bg-rose-600 text-white hover:bg-rose-700 animate-pulse'
-                : 'bg-rose-50 text-rose-900 border border-rose-300 hover:bg-rose-100'
-            }`}
+            onClick={() => setShowTripModal(true)}
+            className="p-3 rounded-2xl bg-white border border-[#C8D8BC] hover:border-blue-500 shadow-xs text-left transition-all space-y-1 group"
           >
-            <div className="flex items-center gap-2">
-              <AlertOctagon size={16} className="text-rose-600 shrink-0" />
-              <span>🔴 Critical Emergency Mode (SOS Siren & 112 Beacon)</span>
+            <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center">
+              <Car size={16} />
             </div>
-            <span className="px-2 py-0.5 rounded-full bg-white/80 text-rose-800 text-[10px] font-bold">
-              Open SOS →
-            </span>
+            <div className="text-xs font-bold text-[#0F2018] group-hover:text-blue-700">
+              Check My Trip
+            </div>
+            <div className="text-[10px] text-slate-500">Analyze route risk</div>
           </button>
 
-          <div className="grid grid-cols-3 gap-2.5">
-            <button
-              onClick={() => setShowTripModal(true)}
-              className="p-3.5 rounded-2xl bg-white border border-[#C8D8BC] hover:border-[#4A7C59] shadow-xs text-left transition-all space-y-1 group"
-            >
-              <div className="w-7 h-7 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center mb-1">
-                <Car size={15} />
-              </div>
-              <div className="text-xs font-bold text-[#0F2018] group-hover:text-[#4A7C59]">
-                Check My Trip
-              </div>
-              <div className="text-[10px] text-[#1A3028]">Route safety & pass check</div>
-            </button>
+          <button
+            onClick={() => setShowReportModal(true)}
+            className="p-3 rounded-2xl bg-white border border-[#C8D8BC] hover:border-amber-500 shadow-xs text-left transition-all space-y-1 group"
+          >
+            <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center">
+              <Camera size={16} />
+            </div>
+            <div className="text-xs font-bold text-[#0F2018] group-hover:text-amber-700">
+              Report Hazard
+            </div>
+            <div className="text-[10px] text-slate-500">Photo & Voice GPS</div>
+          </button>
 
-            <button
-              onClick={() => setShowReportModal(true)}
-              className="p-3.5 rounded-2xl bg-white border border-[#C8D8BC] hover:border-amber-500 shadow-xs text-left transition-all space-y-1 group"
-            >
-              <div className="w-7 h-7 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center mb-1">
-                <Camera size={15} />
-              </div>
-              <div className="text-xs font-bold text-[#0F2018] group-hover:text-amber-700">
-                Report Hazard
-              </div>
-              <div className="text-[10px] text-[#1A3028]">Camera photo + Mic audio</div>
-            </button>
+          <button
+            onClick={() => setShowSaferModal(true)}
+            className="p-3 rounded-2xl bg-white border border-[#C8D8BC] hover:border-emerald-500 shadow-xs text-left transition-all space-y-1 group"
+          >
+            <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center">
+              <Compass size={16} />
+            </div>
+            <div className="text-xs font-bold text-[#0F2018] group-hover:text-emerald-700">
+              Safer Ground
+            </div>
+            <div className="text-[10px] text-slate-500">Flatter low-slope areas</div>
+          </button>
 
-            <button
-              onClick={() => setShowSaferModal(true)}
-              className="p-3.5 rounded-2xl bg-white border border-[#C8D8BC] hover:border-emerald-500 shadow-xs text-left transition-all space-y-1 group"
-            >
-              <div className="w-7 h-7 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center mb-1">
-                <Compass size={15} />
-              </div>
-              <div className="text-xs font-bold text-[#0F2018] group-hover:text-emerald-700">
-                Safer Ground
-              </div>
-              <div className="text-[10px] text-[#1A3028]">Nearby flatter slopes</div>
-            </button>
-          </div>
+          <button
+            onClick={() => setShowEmergencyModal(true)}
+            className="p-3 rounded-2xl bg-white border border-[#C8D8BC] hover:border-rose-500 shadow-xs text-left transition-all space-y-1 group"
+          >
+            <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-800 flex items-center justify-center">
+              <AlertOctagon size={16} />
+            </div>
+            <div className="text-xs font-bold text-[#0F2018] group-hover:text-rose-700">
+              Emergency SOS
+            </div>
+            <div className="text-[10px] text-slate-500">Call 112 & Share GPS</div>
+          </button>
         </div>
 
-        {/* 2. "WHY IS MY AREA AT RISK?" PLAIN LANGUAGE CARDS */}
-        <div className="card p-4 space-y-3 bg-white border border-[#C8D8BC]">
-          <div className="text-xs font-bold text-[#0F2018] uppercase tracking-wider">
-            Why is my area assessed at {risk.level} risk?
+        {/* SECTION 8: "WHY IS MY AREA AT RISK?" (Dynamic Factors) */}
+        <div className="p-4 rounded-3xl bg-white border border-[#C8D8BC] shadow-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-black text-[#0F2018] uppercase tracking-wider">
+              Why is my area evaluated as {risk.level}?
+            </h3>
+            <span className="text-[10px] font-mono text-slate-400">Multi-Factor Evidence</span>
           </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {breakdownCards.map((b: any, i: number) => (
-              <div key={i} className="p-3 rounded-xl bg-[#F5F0E8] border border-[#C8D8BC]/80 space-y-1">
+            {(riskData.breakdownCards || []).map((card: any, idx: number) => (
+              <div
+                key={idx}
+                className="p-3 rounded-2xl bg-[#FAF7F2] border border-[#C8D8BC]/70 space-y-1"
+              >
                 <div className="flex items-center justify-between text-xs font-bold text-[#0F2018]">
-                  <span>{b.title}</span>
-                  <span className="text-sm">{b.icon}</span>
+                  <span className="flex items-center gap-1.5">
+                    <span>{card.icon}</span>
+                    <span>{card.title}</span>
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-white border border-[#C8D8BC] font-semibold text-slate-700">
+                    {card.status}
+                  </span>
                 </div>
-                <div className="text-[11px] font-mono font-bold text-[#4A7C59]">{b.value}</div>
-                <div className="text-[10px] text-[#1A3028] leading-tight">{b.desc}</div>
+                <div className="text-xs font-mono font-bold text-[#4A7C59]">{card.value}</div>
+                <p className="text-[11px] text-[#2C4A3E] leading-relaxed">{card.desc}</p>
               </div>
             ))}
           </div>
         </div>
 
-        {/* 4. CURRENT ENVIRONMENTAL CONDITIONS */}
-        <div className="card p-4 space-y-3 bg-white border border-[#C8D8BC]">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-[#0F2018] uppercase tracking-wider">
-              Current Environmental Conditions
-            </span>
-            <span className="text-[10px] text-[#4A7C59] font-mono font-bold">Open-Meteo Synced</span>
+        {/* SECTION 9: "WHAT SHOULD I DO?" SAFETY RECOMMENDATIONS & WARNING SIGNS */}
+        <div className="p-4 rounded-3xl bg-white border border-[#C8D8BC] shadow-xs space-y-3.5">
+          <div>
+            <h3 className="text-xs font-black text-[#0F2018] uppercase tracking-wider">
+              ⚠️ What Should I Do Right Now?
+            </h3>
+            <p className="text-[11px] text-[#2C4A3E] mt-0.5">
+              Tailored safety actions for assessed {risk.level} condition
+            </p>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-            <div className="p-2.5 rounded-xl bg-[#FAF7F2] border border-[#C8D8BC] space-y-0.5">
-              <div className="flex items-center gap-1 text-[10px] text-slate-500">
-                <CloudRain size={12} className="text-blue-500" />
-                <span>Precipitation (24h)</span>
-              </div>
-              <div className="font-mono font-black text-sm text-[#0F2018]">
-                {breakdownCards[0]?.value?.split(' ')[0] || '86.5'} mm
-              </div>
-              <div className="text-[9px] text-[#1A3028]">Pluvial rain volume</div>
-            </div>
-
-            <div className="p-2.5 rounded-xl bg-[#FAF7F2] border border-[#C8D8BC] space-y-0.5">
-              <div className="flex items-center gap-1 text-[10px] text-slate-500">
-                <Compass size={12} className="text-amber-500" />
-                <span>Slope Steepness</span>
-              </div>
-              <div className="font-mono font-black text-sm text-[#0F2018]">
-                {breakdownCards[1]?.value?.split(' ')[0] || '38.4°'}
-              </div>
-              <div className="text-[9px] text-[#1A3028]">Hillside gradient</div>
-            </div>
-
-            <div className="p-2.5 rounded-xl bg-[#FAF7F2] border border-[#C8D8BC] space-y-0.5">
-              <div className="flex items-center gap-1 text-[10px] text-slate-500">
-                <Droplets size={12} className="text-cyan-500" />
-                <span>Pore Moisture</span>
-              </div>
-              <div className="font-mono font-black text-sm text-[#0F2018]">
-                {breakdownCards[2]?.value?.split(' ')[0] || '72%'}
-              </div>
-              <div className="text-[9px] text-[#1A3028]">Subsurface pressure</div>
-            </div>
-
-            <div className="p-2.5 rounded-xl bg-[#FAF7F2] border border-[#C8D8BC] space-y-0.5">
-              <div className="flex items-center gap-1 text-[10px] text-slate-500">
-                <Thermometer size={12} className="text-rose-500" />
-                <span>Weather State</span>
-              </div>
-              <div className="font-mono font-black text-sm text-[#0F2018]">
-                21.4°C
-              </div>
-              <div className="text-[9px] text-[#1A3028]">Humid overcast</div>
-            </div>
-          </div>
-        </div>
-
-        {/* 3. "WHAT SHOULD I DO?" INTERACTIVE CHECKLIST */}
-        <div className="card p-4 space-y-3 bg-white border border-[#C8D8BC]">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-[#0F2018] uppercase tracking-wider">
-              "What Should I Do?" Safety Checklist
-            </span>
-            <span className="text-[11px] font-mono font-bold text-[#4A7C59]">
-              {completedChecks}/{actionTips.length} Completed ({completionPct}%)
-            </span>
-          </div>
-
-          {/* Progress bar */}
-          <div className="w-full h-1.5 rounded-full bg-[#FAF7F2] overflow-hidden border border-[#C8D8BC]/50">
-            <div
-              className="h-full bg-[#4A7C59] transition-all duration-300 rounded-full"
-              style={{ width: `${completionPct}%` }}
-            ></div>
-          </div>
-
-          <ul className="space-y-2 text-xs text-[#0F2018]">
-            {actionTips.map((tip: string, i: number) => {
-              const isDone = !!checkedTips[i];
-              return (
-                <li
-                  key={i}
-                  onClick={() => toggleCheckTip(i)}
-                  className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-start gap-2.5 ${
-                    isDone
-                      ? 'bg-emerald-50 border-emerald-300 text-emerald-900 line-through opacity-75'
-                      : 'bg-[#F5F0E8] border-[#C8D8BC]/80 hover:border-[#4A7C59]'
-                  }`}
-                >
-                  <button type="button" className="shrink-0 mt-0.5 text-[#4A7C59]">
-                    {isDone ? <CheckSquare size={16} /> : <Square size={16} />}
-                  </button>
-                  <span className="text-xs leading-relaxed font-medium">{tip}</span>
-                </li>
-              );
-            })}
+          <ul className="space-y-2">
+            {(riskData.actionTips || []).map((tip: string, i: number) => (
+              <li key={i} className="flex items-start gap-2.5 text-xs text-[#0F2018]">
+                <CheckCircle size={15} className="text-[#4A7C59] shrink-0 mt-0.5" />
+                <span className="leading-relaxed font-medium">{tip}</span>
+              </li>
+            ))}
           </ul>
+
+          {/* Practical Warning Signs Checklist */}
+          <div className="pt-3 border-t border-[#C8D8BC]/60 space-y-2">
+            <div className="text-[11px] font-bold text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
+              <span>⚠️</span> Watch for immediate slope warning signs:
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px] text-slate-700">
+              {(riskData.warningSigns || []).map((sign: string, i: number) => (
+                <div key={i} className="flex items-center gap-1.5 p-2 rounded-xl bg-amber-50/60 border border-amber-200/60">
+                  <span className="text-amber-700 font-bold">•</span>
+                  <span>{sign}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
-        {/* 5. NEARBY HAZARDS & CITIZEN MAP */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-xs font-bold text-[#0F2018]">
-            <span>Nearby Hazards & Citizen Map</span>
-            <span className="text-[11px] font-normal text-[#1A3028]">3 km surveillance radius</span>
+        {/* SECTION 10: CURRENT ENVIRONMENTAL CONDITIONS (Expandable) */}
+        <div className="p-4 rounded-3xl bg-white border border-[#C8D8BC] shadow-xs space-y-3">
+          <button
+            type="button"
+            onClick={() => setExpandConditions(!expandConditions)}
+            className="w-full flex items-center justify-between text-left"
+          >
+            <div>
+              <h3 className="text-xs font-black text-[#0F2018] uppercase tracking-wider">
+                Current Environmental Conditions
+              </h3>
+              <p className="text-[10px] text-slate-500">Live rainfall, terrain slope, soil & drainage</p>
+            </div>
+            <div className="p-1 rounded-lg bg-slate-100 text-slate-600">
+              {expandConditions ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </div>
+          </button>
+
+          {expandConditions && (
+            <div className="pt-2 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+              <div className="p-2.5 rounded-xl bg-[#FAF7F2] border border-[#C8D8BC]/60">
+                <div className="text-[10px] text-slate-500">Current Rainfall</div>
+                <div className="font-mono font-bold text-[#0F2018] text-sm">
+                  {riskData.currentConditions?.currentRainfall_mmph ?? 0} mm/h
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-[#FAF7F2] border border-[#C8D8BC]/60">
+                <div className="text-[10px] text-slate-500">Last 24h Rainfall</div>
+                <div className="font-mono font-bold text-[#0F2018] text-sm">
+                  {riskData.currentConditions?.rainfall_24h_mm ?? 18.2} mm
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-[#FAF7F2] border border-[#C8D8BC]/60">
+                <div className="text-[10px] text-slate-500">Last 72h Rainfall</div>
+                <div className="font-mono font-bold text-[#0F2018] text-sm">
+                  {riskData.currentConditions?.rainfall_72h_mm ?? 32.8} mm
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-[#FAF7F2] border border-[#C8D8BC]/60">
+                <div className="text-[10px] text-slate-500">Forecast (+24h)</div>
+                <div className="font-mono font-bold text-[#0F2018] text-sm">
+                  {riskData.currentConditions?.forecast_24h_mm ?? 14.5} mm
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-[#FAF7F2] border border-[#C8D8BC]/60">
+                <div className="text-[10px] text-slate-500">Terrain Slope</div>
+                <div className="font-mono font-bold text-[#0F2018] text-sm">
+                  {riskData.currentConditions?.slope_deg ?? 38}° Inclination
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-[#FAF7F2] border border-[#C8D8BC]/60">
+                <div className="text-[10px] text-slate-500">Soil Geology</div>
+                <div className="font-bold text-[#0F2018] text-xs truncate">
+                  {riskData.currentConditions?.soilType ?? 'Mountain Shale'}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* SECTION 11 & 20: SIMPLIFIED CITIZEN MAP & NEARBY HAZARDS */}
+        <div id="citizen-map-section" className="p-4 rounded-3xl bg-white border border-[#C8D8BC] shadow-xs space-y-3 scroll-mt-20">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-xs font-black text-[#0F2018] uppercase tracking-wider">
+                Surrounding Hazards & Safe Ground Map
+              </h3>
+              <p className="text-[10px] text-slate-500">Personalized 3km radius safety zone</p>
+            </div>
+            <button
+              onClick={() => {
+                if (user && (role === 'authority' || role === 'admin')) {
+                  navigate('/map');
+                } else {
+                  navigate('/authority/login');
+                }
+              }}
+              className="px-2.5 py-1 rounded-xl bg-[#1A3028] hover:bg-[#0F2018] text-white text-[11px] font-bold flex items-center gap-1 shadow-xs transition-colors"
+              title="Open Multi-Layer Authority GIS Map"
+            >
+              <Layers size={12} />
+              <span>ADVANCED MAP</span>
+            </button>
           </div>
+
           <CitizenMap
             userCoordinates={{ lat: currentCoords.lat, lon: currentCoords.lon }}
-            locationName={currentCoords.name || 'Your Location'}
-            riskLevel={risk.level || 'MODERATE'}
-            riskScore={typeof risk.score === 'number' ? risk.score : 45}
-            nearbyHazards={riskData?.nearbyHazards || []}
+            locationName={currentCoords.name}
+            riskLevel={risk.level}
+            riskScore={risk.score}
+            nearbyHazards={riskData.nearbyHazards || []}
             citizenReports={citizenReports}
             height="260px"
           />
-        </div>
 
-        {/* 9. SHARE MY SAFETY GPS & EMERGENCY SOS ACTION BUTTONS */}
-        <div className="p-4 rounded-2xl bg-rose-50 border border-rose-300 space-y-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-black text-rose-900 flex items-center gap-1.5">
-              <span>🆘</span> Emergency Distress Action
-            </span>
-            <span className="text-[10px] text-rose-700 font-bold">24x7 Toll-Free</span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <a
-              href="tel:112"
-              className="py-2.5 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all text-center"
-            >
-              <PhoneCall size={14} />
-              <span>Call 112 (National)</span>
-            </a>
-
-            <button
-              onClick={handleShareLocation}
-              className="py-2.5 px-3 rounded-xl bg-white hover:bg-rose-100/50 text-rose-900 border border-rose-300 font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all"
-            >
-              <Share2 size={14} />
-              <span>Share My Safety GPS</span>
-            </button>
-
-            <button
-              onClick={handleWhatsAppShare}
-              className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all"
-            >
-              <span>WhatsApp SOS</span>
-            </button>
+          {/* NEARBY HAZARDS LIST */}
+          <div className="space-y-1.5 pt-2">
+            <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+              📍 Nearby Assessed Hazard Locations:
+            </div>
+            <div className="space-y-1.5">
+              {(riskData.nearbyHazards || []).map((haz: any) => (
+                <div
+                  key={haz.id}
+                  className="p-2.5 rounded-xl bg-[#FAF7F2] border border-[#C8D8BC]/70 flex items-center justify-between text-xs"
+                >
+                  <div className="space-y-0.5">
+                    <div className="font-bold text-[#0F2018] flex items-center gap-1.5">
+                      <span className="text-amber-600">●</span>
+                      <span>{haz.title}</span>
+                    </div>
+                    <div className="text-[10px] text-slate-500">{haz.description}</div>
+                  </div>
+                  <span className="font-mono font-bold text-[#4A7C59] shrink-0 ml-2">
+                    {haz.distanceKm} km away
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* COMMUNITY GROUND HAZARD REPORTS FEED */}
-        <div className="card p-4 space-y-3 bg-white border border-[#C8D8BC]">
+        {/* SECTION 22: COMMUNITY GROUND REPORTS FEED */}
+        <div className="p-4 rounded-3xl bg-white border border-[#C8D8BC] shadow-xs space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-[#0F2018] uppercase tracking-wider">
-              Community Ground Hazard Reports
-            </span>
-            <span className="text-[11px] font-mono text-[#4A7C59] font-bold">
-              {citizenReports.length} Submitted
-            </span>
+            <div>
+              <h3 className="text-xs font-black text-[#0F2018] uppercase tracking-wider">
+                Community Ground Reports Feed
+              </h3>
+              <p className="text-[10px] text-slate-500">Submitted by residents and field observers</p>
+            </div>
+            <button
+              onClick={() => setShowReportModal(true)}
+              className="px-2.5 py-1 rounded-xl bg-[#4A7C59] hover:bg-[#3B6647] text-white text-[11px] font-bold"
+            >
+              + Report Hazard
+            </button>
           </div>
 
-          <div className="space-y-2.5">
-            {citizenReports.slice(0, 3).map((r) => (
+          <div className="space-y-2">
+            {citizenReports.slice(0, 3).map((rep) => (
               <div
-                key={r.id}
-                className="p-3 rounded-xl bg-[#F5F0E8] border border-[#C8D8BC] space-y-1.5"
+                key={rep.id}
+                className="p-3 rounded-2xl bg-[#FAF7F2] border border-[#C8D8BC]/70 space-y-1.5 text-xs"
               >
                 <div className="flex items-center justify-between">
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                    {r.observationType ? r.observationType.replace(/_/g, ' ') : 'GROUND HAZARD'}
+                    {rep.observationType?.replace(/_/g, ' ')}
                   </span>
-                  <span className="text-[10px] font-mono text-[#1A3028]">
-                    {new Date(r.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  <span className={`text-[10px] font-bold ${rep.status === 'VERIFIED' ? 'text-emerald-700' : 'text-slate-500'}`}>
+                    ● {rep.status}
                   </span>
                 </div>
-                <div className="text-xs font-bold text-[#0F2018]">
-                  {r.locationName || r.nearestCatchmentName}
-                </div>
-                {r.description && (
-                  <div className="text-[11px] text-[#1A3028] italic">"{r.description}"</div>
+                <div className="font-bold text-[#0F2018]">{rep.locationName || rep.nearestCatchmentName}</div>
+                {rep.description && (
+                  <p className="text-[11px] text-[#2C4A3E] italic bg-white p-2 rounded-xl border border-slate-100">
+                    "{rep.description}"
+                  </p>
                 )}
-                <div className="flex items-center justify-between text-[10px] pt-1 text-[#1A3028]">
-                  <span className="font-mono">
-                    {r.coordinates?.lat ? `${r.coordinates.lat.toFixed(3)}°N, ${r.coordinates.lon.toFixed(3)}°E` : 'NER GPS'}
-                  </span>
-                  <span className={`font-bold ${r.status === 'VERIFIED' ? 'text-emerald-700' : 'text-amber-700'}`}>
-                    ● {r.status}
-                  </span>
+                {rep.photoUrl && (
+                  <div className="h-28 rounded-xl overflow-hidden border border-[#C8D8BC]">
+                    <img src={rep.photoUrl} alt="Report evidence" className="w-full h-full object-cover" />
+                  </div>
+                )}
+                <div className="text-[10px] text-slate-400 flex items-center justify-between pt-1 font-mono">
+                  <span>Reporter: {rep.userName || 'Citizen'}</span>
+                  <span>{new Date(rep.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
               </div>
             ))}
@@ -702,167 +679,141 @@ export function CitizenDashboard() {
         </div>
       </main>
 
-      {/* 8. LOCATION PICKER MODAL WITH VOICE SEARCH */}
-      {showLocationPicker && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-2xl border border-[#C8D8BC] shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[85vh]">
-            <div className="p-4 border-b border-[#C8D8BC] bg-[#F5F0E8] flex items-center justify-between">
-              <div>
-                <div className="text-xs font-black text-[#0F2018]">Select Northeast India Location</div>
-                <div className="text-[10px] text-[#1A3028]">Monitored across the 8 NER States</div>
-              </div>
-              <button
-                onClick={() => {
-                  setShowLocationPicker(false);
-                  setDenialAlert(null);
-                }}
-                className="text-xs text-[#1A3028] font-bold hover:text-black p-1"
-              >
-                Close ✕
-              </button>
-            </div>
+      {/* MOBILE BOTTOM NAVIGATION BAR (Section 23) */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[#C8D8BC] py-2 px-4 shadow-lg">
+        <div className="max-w-md mx-auto grid grid-cols-5 gap-1 text-center">
+          <button
+            onClick={() => setActiveTab('home')}
+            className={`flex flex-col items-center gap-0.5 py-1 rounded-xl text-[10px] font-bold transition-colors ${
+              activeTab === 'home' ? 'text-[#4A7C59]' : 'text-slate-500'
+            }`}
+          >
+            <Shield size={18} />
+            <span>HOME</span>
+          </button>
 
-            {/* Non-NER Warning Banner */}
-            {(() => {
-              const check = locationSearch.trim().length >= 3 ? isLocationInNER(0, 0, locationSearch) : { allowed: true };
-              if (!check.allowed || denialAlert) {
-                return (
-                  <div className="m-3 p-3 rounded-xl bg-rose-50 border border-rose-300 text-rose-900 text-[11px] space-y-1">
-                    <div className="flex items-center gap-1.5 font-bold">
-                      <AlertTriangle size={14} className="text-rose-600 shrink-0" />
-                      <span>Outside Operational NER Boundary</span>
-                    </div>
-                    <div className="leading-snug">{check.reason || denialAlert}</div>
-                  </div>
-                );
+          <button
+            onClick={() => {
+              setActiveTab('map');
+              const el = document.getElementById('citizen-map-section');
+              if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
               }
-              return null;
-            })()}
+            }}
+            className={`flex flex-col items-center gap-0.5 py-1 rounded-xl text-[10px] font-bold transition-colors ${
+              activeTab === 'map' ? 'text-[#4A7C59]' : 'text-slate-500'
+            }`}
+          >
+            <Navigation size={18} />
+            <span>MAP</span>
+          </button>
 
-            <div className="p-3 border-b border-[#C8D8BC] space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Search NER district, town, or mountain pass..."
-                    value={locationSearch}
-                    onChange={(e) => setLocationSearch(e.target.value)}
-                    className="w-full pl-8 pr-3 py-2 rounded-xl border border-[#C8D8BC] text-xs text-[#0F2018] focus:outline-none focus:border-[#4A7C59]"
-                  />
-                </div>
+          <button
+            onClick={() => setShowTripModal(true)}
+            className="flex flex-col items-center gap-0.5 py-1 rounded-xl text-[10px] font-bold text-slate-500 hover:text-[#4A7C59] transition-colors"
+          >
+            <Car size={18} />
+            <span>TRAVEL</span>
+          </button>
 
-                {/* Voice Search Button */}
-                <button
-                  type="button"
-                  onClick={toggleVoiceSearch}
-                  className={`p-2 rounded-xl border transition-all ${
-                    isListeningVoiceSearch
-                      ? 'bg-rose-100 text-rose-700 border-rose-300 animate-pulse'
-                      : 'bg-white border-[#C8D8BC] text-[#4A7C59] hover:bg-[#FAF7F2]'
-                  }`}
-                  title="Voice search location"
-                >
-                  <Mic size={15} />
-                </button>
-              </div>
+          <button
+            onClick={() => setShowReportModal(true)}
+            className="flex flex-col items-center gap-0.5 py-1 rounded-xl text-[10px] font-bold text-slate-500 hover:text-amber-700 transition-colors"
+          >
+            <Camera size={18} />
+            <span>REPORT</span>
+          </button>
 
-              {/* State Filter Pills */}
-              <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none text-[11px]">
-                <button
-                  onClick={() => setSelectedStateFilter('All')}
-                  className={`px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all ${
-                    selectedStateFilter === 'All'
-                      ? 'bg-[#0F2018] text-white'
-                      : 'bg-[#FAF7F2] border border-[#C8D8BC] text-[#1A3028]'
-                  }`}
-                >
-                  All 8 States
-                </button>
-                {NER_STATES.map((st) => (
-                  <button
-                    key={st}
-                    onClick={() => setSelectedStateFilter(st)}
-                    className={`px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all ${
-                      selectedStateFilter === st
-                        ? 'bg-[#4A7C59] text-white'
-                        : 'bg-[#FAF7F2] border border-[#C8D8BC] text-[#1A3028]'
-                    }`}
-                  >
-                    {st}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="overflow-y-auto p-2 space-y-1 text-xs flex-1">
-              <button
-                onClick={handleUseGPS}
-                className="w-full p-2.5 rounded-xl bg-[#4A7C59]/10 text-[#4A7C59] font-bold text-left flex items-center gap-2 hover:bg-[#4A7C59]/20 transition-colors"
-              >
-                <Compass size={15} />
-                <span>Auto-Detect My GPS (Northeast India)</span>
-              </button>
-
-              {NER_CATCHMENT_PRESETS.filter((c) => {
-                const matchState = selectedStateFilter === 'All' || c.state === selectedStateFilter;
-                const q = locationSearch.toLowerCase().trim();
-                const matchSearch =
-                  !q ||
-                  c.name.toLowerCase().includes(q) ||
-                  c.district.toLowerCase().includes(q) ||
-                  c.state.toLowerCase().includes(q);
-                return matchState && matchSearch;
-              }).map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => handleSelectCatchment(c)}
-                  className="w-full p-2.5 rounded-xl hover:bg-[#F5F0E8] text-left transition-colors flex items-center justify-between border border-transparent hover:border-[#C8D8BC]"
-                >
-                  <div>
-                    <div className="font-bold text-[#0F2018]">{c.name}</div>
-                    <div className="text-[10px] text-[#1A3028]">{c.district}, {c.state} • {c.description}</div>
-                  </div>
-                  <MapPin size={13} className="text-slate-400 shrink-0" />
-                </button>
-              ))}
-            </div>
-          </div>
+          <button
+            onClick={handleShareLocation}
+            className="flex flex-col items-center gap-0.5 py-1 rounded-xl text-[10px] font-bold text-slate-500 hover:text-rose-600 transition-colors"
+          >
+            <Share2 size={18} />
+            <span>SHARE</span>
+          </button>
         </div>
-      )}
+      </nav>
 
-      {/* ALL MODALS */}
+      {/* MODALS */}
+      {/* 1. Report Hazard with Camera & Mic */}
       <ReportHazardModal
         isOpen={showReportModal}
         onClose={() => setShowReportModal(false)}
         userCoordinates={currentCoords}
         onReportSubmitted={(rep) => {
           setCitizenReports((prev) => [rep, ...prev]);
+          showToast('✓ Hazard report submitted with evidence');
         }}
       />
 
+      {/* 2. Check My Trip */}
       <TripCheckModal
         isOpen={showTripModal}
         onClose={() => setShowTripModal(false)}
       />
 
+      {/* 3. Potential Safer Ground */}
       <SaferLocationModal
         isOpen={showSaferModal}
         onClose={() => setShowSaferModal(false)}
-        locations={riskData?.saferLocations || riskData?.potentialSaferLocations || []}
-        currentLocationName={currentCoords.name || 'Your Location'}
+        locations={riskData.potentialSaferLocations || []}
+        currentLocationName={currentCoords.name}
       />
 
-      {/* 10. CRITICAL EMERGENCY MODE MODAL */}
+      {/* 4. Emergency Mode Modal */}
       <EmergencyModeModal
         isOpen={showEmergencyModal}
         onClose={() => setShowEmergencyModal(false)}
-        userCoordinates={currentCoords}
-        riskLevel={risk.level}
-        riskScore={typeof risk.score === 'number' ? risk.score : 45}
-        nearestCatchmentName={nearestCatchment.name}
-        saferLocation={riskData?.potentialSaferLocations?.[0]}
+        locationName={currentCoords.name}
+        riskScore={risk.score}
+        onOpenReport={() => setShowReportModal(true)}
+        onOpenSaferGround={() => setShowSaferModal(true)}
+        onShareLocation={handleShareLocation}
       />
+
+      {/* 5. Manual Location Selector Dialog */}
+      {showLocationPicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-3xl border border-[#C8D8BC] p-5 w-full max-w-md space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between pb-2 border-b border-[#C8D8BC]">
+              <h3 className="text-sm font-bold text-[#0F2018]">Select Location</h3>
+              <button
+                onClick={() => setShowLocationPicker(false)}
+                className="p-1 text-slate-400 hover:text-slate-600"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="relative">
+              <input
+                type="text"
+                value={locationSearch}
+                onChange={(e) => setLocationSearch(e.target.value)}
+                placeholder="Search town or district..."
+                className="w-full px-3.5 py-2 pl-9 rounded-xl border border-[#C8D8BC] text-xs focus:outline-none focus:border-[#4A7C59]"
+              />
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            </div>
+
+            <div className="space-y-1 max-h-60 overflow-y-auto pr-1 scrollbar-thin">
+              {filteredLocations.map((loc) => (
+                <button
+                  key={loc.id}
+                  onClick={() => handleSelectCatchment(loc)}
+                  className="w-full text-left p-2.5 rounded-xl bg-[#FAF7F2] hover:bg-[#EAEFD8] border border-[#C8D8BC]/60 flex items-center justify-between text-xs"
+                >
+                  <div>
+                    <div className="font-bold text-[#0F2018]">{loc.name}</div>
+                    <div className="text-[10px] text-slate-500">{loc.district}, {loc.state}</div>
+                  </div>
+                  <MapPin size={14} className="text-[#4A7C59]" />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

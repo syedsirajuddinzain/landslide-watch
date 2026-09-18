@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { useUIStore } from '../../store/uiStore';
 import {
@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 
 const NAV = [
+  { to: '/citizen',      icon: Users,            label: 'Citizen Safety Portal', roles: ['admin','authority','viewer','citizen'] },
+  { separator: true, label: 'AUTHORITY COCKPIT' },
   { to: '/',             icon: LayoutDashboard, label: 'Command Center', roles: ['admin','authority','viewer'] },
   { to: '/map',          icon: Map,             label: 'Live Risk Map',  roles: ['admin','authority','viewer'] },
   { to: '/locations',    icon: MapPin,           label: 'Locations',     roles: ['admin','authority','viewer'] },
@@ -28,7 +30,7 @@ const NAV = [
 ];
 
 export function Sidebar() {
-  const { user, role, signOut } = useAuthStore();
+  const { user, role, switchPortal, signOut } = useAuthStore();
   const { sidebarOpen, closeSidebar } = useUIStore();
   const navigate = useNavigate();
 
@@ -74,6 +76,40 @@ export function Sidebar() {
           </button>
         </div>
 
+        {/* Quick Portal Switcher Banner */}
+        <div className="px-3 pt-3 pb-1">
+          <button
+            onClick={() => {
+              switchPortal('citizen');
+              closeSidebar();
+              navigate('/citizen/dashboard');
+            }}
+            className="w-full px-3 py-2.5 rounded-xl bg-[#4A7C59] hover:bg-[#3B6647] text-white text-xs font-bold flex items-center justify-between transition-all group shadow-sm cursor-pointer"
+            title="Open Citizen Safety Portal"
+          >
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-300 animate-ping" />
+              <Users size={15} />
+              <span>Citizen Safety Portal</span>
+            </div>
+            <span className="text-xs font-bold group-hover:translate-x-0.5 transition-transform">→</span>
+          </button>
+
+          <div className="flex items-center justify-between px-1 mt-1.5 text-[10px]">
+            <span className="text-slate-500 font-medium">Public Resident View</span>
+            <button
+              onClick={() => {
+                switchPortal('citizen');
+                closeSidebar();
+                navigate('/citizen/welcome');
+              }}
+              className="text-[#4A7C59] hover:underline font-bold cursor-pointer"
+            >
+              Welcome Guide →
+            </button>
+          </div>
+        </div>
+
         {/* Navigation */}
         <nav className="flex-1 p-2 space-y-0.5">
           {NAV.map((item, i) => {
@@ -93,7 +129,12 @@ export function Sidebar() {
                 key={item.to}
                 to={item.to!}
                 end={item.to === '/'}
-                onClick={closeSidebar}
+                onClick={() => {
+                  if (item.to?.startsWith('/citizen')) {
+                    switchPortal('citizen');
+                  }
+                  closeSidebar();
+                }}
                 className={({ isActive }) =>
                   isActive ? 'sidebar-item-active' : 'sidebar-item'
                 }
@@ -107,6 +148,21 @@ export function Sidebar() {
 
         {/* User */}
         <div className="p-3 border-t border-surface-border">
+          <button
+            onClick={() => {
+              switchPortal('citizen');
+              closeSidebar();
+              navigate('/citizen/dashboard');
+            }}
+            className="w-full py-2 px-2.5 rounded-xl bg-[#F5F0E8] hover:bg-[#EAE2D5] border border-[#C8D8BC] text-[#0F2018] text-xs font-bold flex items-center justify-between transition-all mb-2 cursor-pointer"
+          >
+            <div className="flex items-center gap-1.5">
+              <Users size={14} className="text-[#4A7C59]" />
+              <span>Switch to Citizen View</span>
+            </div>
+            <span className="text-xs text-[#4A7C59] font-bold">→</span>
+          </button>
+
           <div className="flex items-center gap-2 px-2 py-1.5 mb-1">
             <div className="w-7 h-7 rounded-full bg-brand flex items-center justify-center text-xs font-bold text-white">
               {user?.email?.[0]?.toUpperCase() || 'U'}

@@ -12,6 +12,7 @@ import {
 } from '../components/shared/Badges';
 import { RiskDistributionChart } from '../components/charts/Charts';
 import { useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../store/authStore';
 import {
   Activity,
   Users,
@@ -34,6 +35,7 @@ type WeatherScenario = 'BASELINE' | 'MONSOON_SURGE' | 'STABILIZATION';
 
 export default function CommandCenter() {
   const navigate = useNavigate();
+  const { switchPortal } = useAuthStore();
   const [scenario, setScenario] = useState<WeatherScenario>('BASELINE');
 
   const { data: locData, isLoading: locLoading } = useQuery(
@@ -319,6 +321,32 @@ export default function CommandCenter() {
             Executive Early-Warning & Meteorological Cockpit for Northeast India
           </p>
         </div>
+
+        {/* Quick Portal Switcher Actions */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              switchPortal('citizen');
+              navigate('/citizen/welcome');
+            }}
+            className="px-3 py-2 rounded-xl bg-white hover:bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold transition-all shadow-2xs cursor-pointer"
+            title="Open Citizen Onboarding & Welcome Guide"
+          >
+            Citizen Welcome
+          </button>
+          <button
+            onClick={() => {
+              switchPortal('citizen');
+              navigate('/citizen/dashboard');
+            }}
+            className="px-3.5 py-2 rounded-xl bg-[#4A7C59] hover:bg-[#1A3028] text-white text-xs font-bold flex items-center gap-2 shadow-sm transition-all cursor-pointer group"
+            title="Switch directly to Citizen Safety Portal"
+          >
+            <Users size={15} />
+            <span>Open Citizen Safety Portal</span>
+            <ArrowRight size={13} className="group-hover:translate-x-0.5 transition-transform" />
+          </button>
+        </div>
       </div>
 
       {/* Interactive Weather Telemetry Scenario Switcher */}
@@ -447,7 +475,27 @@ export default function CommandCenter() {
           </div>
 
           {/* Clean Mission Navigation Cards (Directing to Dedicated Pages) */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+            <div
+              onClick={() => {
+                switchPortal('citizen');
+                navigate('/citizen/dashboard');
+              }}
+              className="p-4 bg-emerald-50/80 hover:bg-emerald-100 rounded-xl border border-emerald-300 hover:border-[#4A7C59] cursor-pointer transition-all shadow-xs space-y-2 group"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Users size={18} className="text-[#4A7C59]" />
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                </div>
+                <ChevronRight size={14} className="text-emerald-700 group-hover:translate-x-0.5 transition-transform" />
+              </div>
+              <div className="font-bold text-xs text-[#0F2018]">Citizen Safety Portal</div>
+              <p className="text-[11px] text-[#1A3028] leading-snug">
+                View real-time public safety card, risk advisories & citizen hazard reporting.
+              </p>
+            </div>
+
             <div
               onClick={() => navigate('/map')}
               className="p-4 bg-white rounded-xl border border-[#C8D8BC] hover:border-[#4A7C59] cursor-pointer transition-all shadow-xs space-y-2 group"
@@ -518,13 +566,26 @@ export default function CommandCenter() {
               </span>
             </div>
           </div>
-          <button
-            onClick={() => navigate('/response')}
-            className="text-xs text-[#4A7C59] font-bold hover:text-[#0F2018] flex items-center gap-1 transition-colors"
-          >
-            <span>Dispatch / Verify in Response Center</span>
-            <ArrowRight size={13} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                switchPortal('citizen');
+                navigate('/citizen/dashboard');
+              }}
+              className="text-xs text-emerald-800 hover:text-emerald-950 font-bold flex items-center gap-1 bg-emerald-100/80 px-2.5 py-1 rounded-lg border border-emerald-300 transition-colors cursor-pointer"
+              title="Open Citizen Safety Portal to file a hazard report"
+            >
+              <span>Test Citizen Reporting</span>
+              <ArrowRight size={12} />
+            </button>
+            <button
+              onClick={() => navigate('/response')}
+              className="text-xs text-[#4A7C59] font-bold hover:text-[#0F2018] flex items-center gap-1 transition-colors cursor-pointer"
+            >
+              <span>Dispatch / Verify in Response Center</span>
+              <ArrowRight size={13} />
+            </button>
+          </div>
         </div>
 
         <div className="p-4">

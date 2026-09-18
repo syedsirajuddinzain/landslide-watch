@@ -6,12 +6,15 @@ import { Navbar } from './components/shared/Navbar';
 import { ProtectedRoute } from './components/shared/ProtectedRoute';
 import { Spinner } from './components/shared/Badges';
 
-// Dedicated Full-Featured Pages
-import DualEntryLanding from './pages/DualEntryLanding';
+// Core Dual Entry & Authentication Pages
+import LandingPage from './pages/LandingPage';
+import AuthorityLogin from './pages/AuthorityLogin';
 import CitizenAuth from './pages/citizen/CitizenAuth';
-import Login from './pages/Login';
-import CitizenWelcome from './pages/citizen/CitizenWelcome';
+
+// Citizen Experience
 import CitizenDashboard from './pages/citizen/CitizenDashboard';
+
+// Authority Operational Cockpit Pages
 import CommandCenter from './pages/CommandCenter';
 import LiveRiskMap from './pages/LiveRiskMap';
 import { Locations } from './pages/Locations';
@@ -44,7 +47,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  const { initialize, initialized, activePortal } = useAuthStore();
+  const { initialize, initialized, user, role } = useAuthStore();
 
   useEffect(() => {
     initialize();
@@ -52,10 +55,12 @@ export default function App() {
 
   if (!initialized) {
     return (
-      <div className="flex items-center justify-center h-screen bg-surface">
+      <div className="flex items-center justify-center h-screen bg-[#070D14] text-white">
         <div className="flex flex-col items-center gap-3">
           <Spinner size={32} />
-          <div className="text-slate-400 text-sm">Initializing Landslide Watch System...</div>
+          <div className="text-slate-400 text-xs font-mono tracking-wider">
+            INITIALIZING LANDSLIDE WATCH PLATFORM...
+          </div>
         </div>
       </div>
     );
@@ -64,20 +69,34 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Dual Entry Landing Screen (/) as specified in user workflow */}
-        <Route path="/" element={<DualEntryLanding />} />
+        {/* ROOT: Landing Page when unauthenticated; respective dashboard when authenticated */}
+        <Route
+          path="/"
+          element={
+            !user ? (
+              <LandingPage />
+            ) : role === 'citizen' ? (
+              <CitizenDashboard />
+            ) : (
+              <AppLayout>
+                <CommandCenter />
+              </AppLayout>
+            )
+          }
+        />
 
-        {/* Citizen Workflow */}
+        {/* Dual Entry Routes */}
+        <Route path="/landing" element={<LandingPage />} />
+        <Route path="/authority/login" element={<AuthorityLogin />} />
         <Route path="/citizen/auth" element={<CitizenAuth />} />
-        <Route path="/citizen/login" element={<CitizenAuth />} />
-        <Route path="/citizen/welcome" element={<CitizenWelcome />} />
+        <Route path="/login" element={<Navigate to="/authority/login" replace />} />
+
+        {/* Citizen Safety Experience (Publicly Accessible) */}
+        <Route path="/citizen" element={<CitizenDashboard />} />
         <Route path="/citizen/dashboard" element={<CitizenDashboard />} />
-        <Route path="/citizen" element={<CitizenWelcome />} />
+        <Route path="/citizen/welcome" element={<CitizenDashboard initialWelcome={true} />} />
 
-        {/* Protected Authority Workflow */}
-        <Route path="/authority/login" element={<Login />} />
-        <Route path="/login" element={<Login />} />
-
+        {/* Authority Command Center */}
         <Route
           path="/authority"
           element={
@@ -89,10 +108,11 @@ export default function App() {
           }
         />
 
+        {/* Operational GIS & Monitoring Pages (Strictly Protected for Authority) */}
         <Route
           path="/map"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute minRole="authority">
               <AppLayout>
                 <LiveRiskMap />
               </AppLayout>
@@ -103,7 +123,7 @@ export default function App() {
         <Route
           path="/locations"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute minRole="authority">
               <AppLayout>
                 <Locations />
               </AppLayout>
@@ -114,7 +134,7 @@ export default function App() {
         <Route
           path="/locations/:id"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute minRole="authority">
               <AppLayout>
                 <LocationDetails />
               </AppLayout>
@@ -125,7 +145,7 @@ export default function App() {
         <Route
           path="/rainfall"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute minRole="authority">
               <AppLayout>
                 <RainfallMonitoring />
               </AppLayout>
@@ -136,7 +156,7 @@ export default function App() {
         <Route
           path="/terrain"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute minRole="authority">
               <AppLayout>
                 <TerrainAnalysis />
               </AppLayout>
@@ -147,7 +167,7 @@ export default function App() {
         <Route
           path="/soil"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute minRole="authority">
               <AppLayout>
                 <SoilAnalysis />
               </AppLayout>
@@ -158,7 +178,7 @@ export default function App() {
         <Route
           path="/landslides"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute minRole="authority">
               <AppLayout>
                 <HistoricalLandslides />
               </AppLayout>
@@ -169,7 +189,7 @@ export default function App() {
         <Route
           path="/infrastructure"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute minRole="authority">
               <AppLayout>
                 <InfrastructureExposure />
               </AppLayout>
@@ -180,7 +200,7 @@ export default function App() {
         <Route
           path="/analytics"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute minRole="authority">
               <AppLayout>
                 <RiskAnalytics />
               </AppLayout>
@@ -202,7 +222,7 @@ export default function App() {
         <Route
           path="/notifications"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute minRole="authority">
               <AppLayout>
                 <NotificationsPage />
               </AppLayout>
@@ -224,7 +244,7 @@ export default function App() {
         <Route
           path="/datasources"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute minRole="authority">
               <AppLayout>
                 <DataSourcesPage />
               </AppLayout>
@@ -254,9 +274,9 @@ export default function App() {
           }
         />
 
+        {/* Catch-all redirect to / */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );
 }
-

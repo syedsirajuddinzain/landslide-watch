@@ -100,36 +100,22 @@ export function Navbar() {
 
         <div className="flex items-center gap-3">
           {/* Dual-Portal Mode Switcher (Judge & User Convenience) */}
-          <div className="flex items-center bg-[#F5F0E8] p-0.5 rounded-xl border border-[#C8D8BC]">
+          <div className="flex items-center bg-[#F5F0E8] p-1 rounded-xl border border-[#C8D8BC] shadow-2xs">
+            <span className="px-2 py-1 rounded-lg text-[11px] font-black bg-[#1A3028] text-white shadow-xs flex items-center gap-1">
+              <ShieldAlert size={13} className="text-amber-400" />
+              <span className="hidden sm:inline">Authority Cockpit</span>
+            </span>
             <button
               onClick={() => {
                 switchPortal('citizen');
-                navigate('/citizen');
+                navigate('/citizen/dashboard');
               }}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                activePortal === 'citizen'
-                  ? 'bg-[#4A7C59] text-white shadow-xs'
-                  : 'text-[#1A3028] hover:text-[#0F2018]'
-              }`}
-              title="Switch to Citizen Personal Safety view"
+              className="px-2.5 py-1 rounded-lg text-xs font-bold text-[#0F2018] hover:text-white hover:bg-[#4A7C59] transition-all flex items-center gap-1.5 cursor-pointer ml-1"
+              title="Switch directly to Citizen Safety Portal"
             >
-              <Users size={12} />
-              <span className="hidden sm:inline">Citizen View</span>
-            </button>
-            <button
-              onClick={() => {
-                switchPortal('authority');
-                navigate('/');
-              }}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                activePortal === 'authority'
-                  ? 'bg-[#1A3028] text-white shadow-xs'
-                  : 'text-[#1A3028] hover:text-[#0F2018]'
-              }`}
-              title="Switch to Authority Command Center"
-            >
-              <ShieldAlert size={12} />
-              <span className="hidden sm:inline">Authority View</span>
+              <Users size={13} className="text-[#4A7C59]" />
+              <span className="font-bold">Citizen Portal</span>
+              <span className="text-[10px] text-slate-500 font-bold">→</span>
             </button>
           </div>
 
