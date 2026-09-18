@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from 'react-query';
 import {
@@ -19,6 +19,15 @@ import {
   AlertTriangle,
   ArrowLeft,
   X,
+  AlertOctagon,
+  Mic,
+  CheckSquare,
+  Square,
+  CloudRain,
+  Droplets,
+  Wind,
+  Thermometer,
+  Layers,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import api, { computeCitizenLocationRisk, getStoredCitizenReports } from '../../lib/api';
@@ -27,6 +36,7 @@ import { CitizenMap } from './CitizenMap';
 import { ReportHazardModal } from './ReportHazardModal';
 import { TripCheckModal } from './TripCheckModal';
 import { SaferLocationModal } from './SaferLocationModal';
+import { EmergencyModeModal } from './EmergencyModeModal';
 
 export function CitizenDashboard() {
   const navigate = useNavigate();
@@ -42,6 +52,14 @@ export function CitizenDashboard() {
   const [showReportModal, setShowReportModal] = useState(false);
   const [showTripModal, setShowTripModal] = useState(false);
   const [showSaferModal, setShowSaferModal] = useState(false);
+  const [showEmergencyModal, setShowEmergencyModal] = useState(false);
+
+  // Interactive Checklist State
+  const [checkedTips, setCheckedTips] = useState<Record<number, boolean>>({});
+
+  // Voice Search State in Location Picker
+  const [isListeningVoiceSearch, setIsListeningVoiceSearch] = useState(false);
+  const searchRecognitionRef = useRef<any>(null);
 
   // Toast feedback
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -69,6 +87,45 @@ export function CitizenDashboard() {
     const updated = computeCitizenLocationRisk(currentCoords.lat, currentCoords.lon, undefined, locationsData);
     setRiskData(updated);
   }, [currentCoords.lat, currentCoords.lon, locationsData]);
+
+  // Setup Voice Search for location picker
+  useEffect(() => {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      const rec = new SpeechRecognition();
+      rec.continuous = false;
+      rec.lang = 'en-IN';
+      rec.onresult = (e: any) => {
+        const spoken = e.results[0][0].transcript;
+        if (spoken) {
+          setLocationSearch(spoken);
+        }
+        setIsListeningVoiceSearch(false);
+      };
+      rec.onerror = () => setIsListeningVoiceSearch(false);
+      rec.onend = () => setIsListeningVoiceSearch(false);
+      searchRecognitionRef.current = rec;
+    }
+  }, []);
+
+  const toggleVoiceSearch = () => {
+    if (!searchRecognitionRef.current) {
+      showToast('Voice search not supported in this browser.');
+      return;
+    }
+    if (isListeningVoiceSearch) {
+      searchRecognitionRef.current.stop();
+      setIsListeningVoiceSearch(false);
+    } else {
+      try {
+        searchRecognitionRef.current.start();
+        setIsListeningVoiceSearch(true);
+      } catch {
+        setIsListeningVoiceSearch(false);
+      }
+    }
+  };
 
   // Use Browser Geolocation with Strict NER Boundary Check
   const handleUseGPS = () => {
@@ -136,13 +193,23 @@ export function CitizenDashboard() {
     }
   };
 
+  const handleWhatsAppShare = () => {
+    const text = encodeURIComponent(
+      `🚨 LANDSLIDE WATCH ALERT: My current safety status at ${currentCoords.name} (GPS: ${currentCoords.lat.toFixed(4)}, ${currentCoords.lon.toFixed(4)}) is ${riskData?.currentRisk?.level || 'MONITORED'} (${riskData?.currentRisk?.score || 50}/100). Check live conditions here: ${window.location.href}`
+    );
+    window.open(`https://wa.me/?text=${text}`, '_blank');
+  };
+
   const risk = riskData?.currentRisk || {
     score: 45.2,
     level: 'MODERATE',
+    priorityLevel: 'P3',
+    trend: 'STABLE',
+    trendPct: 0,
     badge: 'MODERATE CAUTION',
     headline: '🟡 ADVISORY: Moderate Slope Susceptibility with Rain',
     explanation: 'Moderate rainfall detected in mountain catchment. Exercise standard caution on hillside paths.',
-    freshness: 'LIVE — Open-Meteo precipitation updated 5 min ago',
+    freshness: 'LIVE — Telemetry synced with Authority Cockpit',
   };
 
   const isCritical = risk.level === 'CRITICAL';
@@ -167,23 +234,30 @@ export function CitizenDashboard() {
       : 'border-[#C8D8BC] bg-[#F5F0E8]/40';
 
   const breakdownCards = riskData?.breakdownCards || [
-    { icon: '🌧️', title: 'Rainfall', value: '8.4 mm (24h)', desc: 'Light-to-moderate showers' },
-    { icon: '⛰️', title: 'Slope Steepness', value: '28° Hillside', desc: 'Moderate incline' },
-    { icon: '💧', title: 'Soil Moisture', value: 'Clay Loam', desc: 'Normal water absorption' },
-    { icon: '📜', title: 'Historical Records', value: 'Documented', desc: 'Regional disaster inventory' },
+    { icon: '🌧️', title: 'Rainfall Saturation', value: '86.5 mm (24h)', desc: 'Heavy precipitation saturation' },
+    { icon: '⛰️', title: 'Slope Incline', value: '38.4° Hillside', desc: 'Steep mountain gradient' },
+    { icon: '💧', title: 'Soil Pore Pressure', value: '72% Saturation', desc: 'Colluvial soil pore pressure' },
+    { icon: '📜', title: 'Historical Records', value: '6 Events Documented', desc: 'Regional disaster inventory' },
   ];
 
-  const actionTips = riskData?.actionTips || riskData?.whatShouldIDo || [
+  const actionTips: string[] = riskData?.actionTips || riskData?.whatShouldIDo || [
     'Avoid parking under steep hillside banks during rainfall.',
     'Keep storm water ditches clear of fallen leaves and silt.',
     'Follow official advisories from the District Disaster Authority.',
   ];
 
-  const freshnessText = riskData?.freshnessMetadata?.rainfall || risk.freshness || 'LIVE — Open-Meteo synced';
+  const toggleCheckTip = (i: number) => {
+    setCheckedTips((prev) => ({ ...prev, [i]: !prev[i] }));
+  };
+
+  const completedChecks = actionTips.filter((_, i) => checkedTips[i]).length;
+  const completionPct = Math.round((completedChecks / (actionTips.length || 1)) * 100);
+
+  const freshnessText = riskData?.freshnessMetadata?.rainfall || risk.freshness || 'LIVE — Telemetry synced';
   const nearestCatchment = riskData?.nearestCatchment || { name: 'Aizawl Catchment', distanceKm: 1.2 };
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] text-[#0F2018] flex flex-col">
+    <div className="min-h-screen bg-[#FAF7F2] text-[#0F2018] flex flex-col font-sans selection:bg-[#4A7C59] selection:text-white">
       {/* Toast Notification */}
       {toastMsg && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl bg-[#0F2018] text-white text-xs font-bold shadow-lg animate-in fade-in">
@@ -195,10 +269,10 @@ export function CitizenDashboard() {
       <div className="bg-[#1A3028] text-white px-4 py-2.5 text-xs flex items-center justify-between border-b border-[#4A7C59]/40">
         <div className="flex items-center gap-2">
           <span className="px-2 py-0.5 rounded-full bg-[#4A7C59] text-[10px] font-black uppercase tracking-wider">
-            👥 Citizen Mode
+            👥 Citizen Safety Portal
           </span>
           <span className="text-slate-300 hidden sm:inline">
-            Personal Safety & Community Alerts
+            Personal Safety & Community Hazard Grid
           </span>
         </div>
         <button
@@ -240,18 +314,9 @@ export function CitizenDashboard() {
             <button
               onClick={() => {
                 switchPortal('authority');
-                navigate('/map');
-              }}
-              className="text-xs text-[#4A7C59] font-bold hover:underline hidden sm:inline"
-            >
-              Open GIS Map
-            </button>
-            <button
-              onClick={() => {
-                switchPortal('authority');
                 navigate('/authority');
               }}
-              className="px-3 py-1.5 rounded-xl bg-[#F5F0E8] border border-[#C8D8BC] hover:border-[#4A7C59] text-xs font-bold text-[#0F2018] transition-all"
+              className="px-3 py-1.5 rounded-xl bg-[#1A3028] hover:bg-[#0F2018] text-white text-xs font-bold transition-all shadow-xs"
             >
               🛡️ Cockpit
             </button>
@@ -304,7 +369,7 @@ export function CitizenDashboard() {
           </div>
         </div>
 
-        {/* PRIMARY "AM I SAFE RIGHT NOW?" RISK CARD */}
+        {/* 1. DYNAMIC "YOUR CURRENT RISK" CARD */}
         <div className={`p-5 rounded-3xl border-2 ${riskCardBorder} shadow-sm space-y-4`}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -361,69 +426,72 @@ export function CitizenDashboard() {
           </div>
         </div>
 
-        {/* 3 QUICK ACTION SHORTCUTS */}
-        <div className="grid grid-cols-3 gap-2.5">
+        {/* 3 QUICK ACTION SHORTCUTS + CRITICAL EMERGENCY MODE BUTTON */}
+        <div className="space-y-2.5">
+          {/* CRITICAL EMERGENCY MODE SOS TRIGGER */}
           <button
-            onClick={() => setShowTripModal(true)}
-            className="p-3.5 rounded-2xl bg-white border border-[#C8D8BC] hover:border-[#4A7C59] shadow-xs text-left transition-all space-y-1 group"
+            onClick={() => setShowEmergencyModal(true)}
+            className={`w-full p-3 rounded-2xl flex items-center justify-between font-black text-xs transition-all shadow-sm ${
+              isCritical
+                ? 'bg-rose-600 text-white hover:bg-rose-700 animate-pulse'
+                : 'bg-rose-50 text-rose-900 border border-rose-300 hover:bg-rose-100'
+            }`}
           >
-            <div className="w-7 h-7 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center mb-1">
-              <Car size={15} />
+            <div className="flex items-center gap-2">
+              <AlertOctagon size={16} className="text-rose-600 shrink-0" />
+              <span>🔴 Critical Emergency Mode (SOS Siren & 112 Beacon)</span>
             </div>
-            <div className="text-xs font-bold text-[#0F2018] group-hover:text-[#4A7C59]">
-              Check My Trip
-            </div>
-            <div className="text-[10px] text-[#1A3028]">Route safety & pass check</div>
+            <span className="px-2 py-0.5 rounded-full bg-white/80 text-rose-800 text-[10px] font-bold">
+              Open SOS →
+            </span>
           </button>
 
-          <button
-            onClick={() => setShowReportModal(true)}
-            className="p-3.5 rounded-2xl bg-white border border-[#C8D8BC] hover:border-amber-500 shadow-xs text-left transition-all space-y-1 group"
-          >
-            <div className="w-7 h-7 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center mb-1">
-              <Camera size={15} />
-            </div>
-            <div className="text-xs font-bold text-[#0F2018] group-hover:text-amber-700">
-              Report Hazard
-            </div>
-            <div className="text-[10px] text-[#1A3028]">Submit photo & GPS</div>
-          </button>
+          <div className="grid grid-cols-3 gap-2.5">
+            <button
+              onClick={() => setShowTripModal(true)}
+              className="p-3.5 rounded-2xl bg-white border border-[#C8D8BC] hover:border-[#4A7C59] shadow-xs text-left transition-all space-y-1 group"
+            >
+              <div className="w-7 h-7 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center mb-1">
+                <Car size={15} />
+              </div>
+              <div className="text-xs font-bold text-[#0F2018] group-hover:text-[#4A7C59]">
+                Check My Trip
+              </div>
+              <div className="text-[10px] text-[#1A3028]">Route safety & pass check</div>
+            </button>
 
-          <button
-            onClick={() => setShowSaferModal(true)}
-            className="p-3.5 rounded-2xl bg-white border border-[#C8D8BC] hover:border-emerald-500 shadow-xs text-left transition-all space-y-1 group"
-          >
-            <div className="w-7 h-7 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center mb-1">
-              <Compass size={15} />
-            </div>
-            <div className="text-xs font-bold text-[#0F2018] group-hover:text-emerald-700">
-              Safer Ground
-            </div>
-            <div className="text-[10px] text-[#1A3028]">Nearby flatter slopes</div>
-          </button>
-        </div>
+            <button
+              onClick={() => setShowReportModal(true)}
+              className="p-3.5 rounded-2xl bg-white border border-[#C8D8BC] hover:border-amber-500 shadow-xs text-left transition-all space-y-1 group"
+            >
+              <div className="w-7 h-7 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center mb-1">
+                <Camera size={15} />
+              </div>
+              <div className="text-xs font-bold text-[#0F2018] group-hover:text-amber-700">
+                Report Hazard
+              </div>
+              <div className="text-[10px] text-[#1A3028]">Camera photo + Mic audio</div>
+            </button>
 
-        {/* INTERACTIVE CITIZEN MAP */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-xs font-bold text-[#0F2018]">
-            <span>Surrounding Hazard Map</span>
-            <span className="text-[11px] font-normal text-[#1A3028]">3 km surveillance radius</span>
+            <button
+              onClick={() => setShowSaferModal(true)}
+              className="p-3.5 rounded-2xl bg-white border border-[#C8D8BC] hover:border-emerald-500 shadow-xs text-left transition-all space-y-1 group"
+            >
+              <div className="w-7 h-7 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center mb-1">
+                <Compass size={15} />
+              </div>
+              <div className="text-xs font-bold text-[#0F2018] group-hover:text-emerald-700">
+                Safer Ground
+              </div>
+              <div className="text-[10px] text-[#1A3028]">Nearby flatter slopes</div>
+            </button>
           </div>
-          <CitizenMap
-            userCoordinates={{ lat: currentCoords.lat, lon: currentCoords.lon }}
-            locationName={currentCoords.name || 'Your Location'}
-            riskLevel={risk.level || 'MODERATE'}
-            riskScore={typeof risk.score === 'number' ? risk.score : 45}
-            nearbyHazards={riskData?.nearbyHazards || []}
-            citizenReports={citizenReports}
-            height="260px"
-          />
         </div>
 
-        {/* "WHY IS THE RISK AT THIS LEVEL?" PLAIN LANGUAGE CARDS */}
+        {/* 2. "WHY IS MY AREA AT RISK?" PLAIN LANGUAGE CARDS */}
         <div className="card p-4 space-y-3 bg-white border border-[#C8D8BC]">
           <div className="text-xs font-bold text-[#0F2018] uppercase tracking-wider">
-            Why is the landslide risk evaluated as {risk.level}?
+            Why is my area assessed at {risk.level} risk?
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {breakdownCards.map((b: any, i: number) => (
@@ -439,31 +507,131 @@ export function CitizenDashboard() {
           </div>
         </div>
 
-        {/* "WHAT SHOULD I DO?" SAFETY ACTIONS */}
+        {/* 4. CURRENT ENVIRONMENTAL CONDITIONS */}
         <div className="card p-4 space-y-3 bg-white border border-[#C8D8BC]">
-          <div className="text-xs font-bold text-[#0F2018] uppercase tracking-wider">
-            What should I do right now?
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-[#0F2018] uppercase tracking-wider">
+              Current Environmental Conditions
+            </span>
+            <span className="text-[10px] text-[#4A7C59] font-mono font-bold">Open-Meteo Synced</span>
           </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+            <div className="p-2.5 rounded-xl bg-[#FAF7F2] border border-[#C8D8BC] space-y-0.5">
+              <div className="flex items-center gap-1 text-[10px] text-slate-500">
+                <CloudRain size={12} className="text-blue-500" />
+                <span>Precipitation (24h)</span>
+              </div>
+              <div className="font-mono font-black text-sm text-[#0F2018]">
+                {breakdownCards[0]?.value?.split(' ')[0] || '86.5'} mm
+              </div>
+              <div className="text-[9px] text-[#1A3028]">Pluvial rain volume</div>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-[#FAF7F2] border border-[#C8D8BC] space-y-0.5">
+              <div className="flex items-center gap-1 text-[10px] text-slate-500">
+                <Compass size={12} className="text-amber-500" />
+                <span>Slope Steepness</span>
+              </div>
+              <div className="font-mono font-black text-sm text-[#0F2018]">
+                {breakdownCards[1]?.value?.split(' ')[0] || '38.4°'}
+              </div>
+              <div className="text-[9px] text-[#1A3028]">Hillside gradient</div>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-[#FAF7F2] border border-[#C8D8BC] space-y-0.5">
+              <div className="flex items-center gap-1 text-[10px] text-slate-500">
+                <Droplets size={12} className="text-cyan-500" />
+                <span>Pore Moisture</span>
+              </div>
+              <div className="font-mono font-black text-sm text-[#0F2018]">
+                {breakdownCards[2]?.value?.split(' ')[0] || '72%'}
+              </div>
+              <div className="text-[9px] text-[#1A3028]">Subsurface pressure</div>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-[#FAF7F2] border border-[#C8D8BC] space-y-0.5">
+              <div className="flex items-center gap-1 text-[10px] text-slate-500">
+                <Thermometer size={12} className="text-rose-500" />
+                <span>Weather State</span>
+              </div>
+              <div className="font-mono font-black text-sm text-[#0F2018]">
+                21.4°C
+              </div>
+              <div className="text-[9px] text-[#1A3028]">Humid overcast</div>
+            </div>
+          </div>
+        </div>
+
+        {/* 3. "WHAT SHOULD I DO?" INTERACTIVE CHECKLIST */}
+        <div className="card p-4 space-y-3 bg-white border border-[#C8D8BC]">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-[#0F2018] uppercase tracking-wider">
+              "What Should I Do?" Safety Checklist
+            </span>
+            <span className="text-[11px] font-mono font-bold text-[#4A7C59]">
+              {completedChecks}/{actionTips.length} Completed ({completionPct}%)
+            </span>
+          </div>
+
+          {/* Progress bar */}
+          <div className="w-full h-1.5 rounded-full bg-[#FAF7F2] overflow-hidden border border-[#C8D8BC]/50">
+            <div
+              className="h-full bg-[#4A7C59] transition-all duration-300 rounded-full"
+              style={{ width: `${completionPct}%` }}
+            ></div>
+          </div>
+
           <ul className="space-y-2 text-xs text-[#0F2018]">
-            {actionTips.map((tip: string, i: number) => (
-              <li key={i} className="flex items-start gap-2">
-                <CheckCircle size={15} className="text-[#4A7C59] shrink-0 mt-0.5" />
-                <span className="text-xs leading-relaxed font-medium">{tip}</span>
-              </li>
-            ))}
+            {actionTips.map((tip: string, i: number) => {
+              const isDone = !!checkedTips[i];
+              return (
+                <li
+                  key={i}
+                  onClick={() => toggleCheckTip(i)}
+                  className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-start gap-2.5 ${
+                    isDone
+                      ? 'bg-emerald-50 border-emerald-300 text-emerald-900 line-through opacity-75'
+                      : 'bg-[#F5F0E8] border-[#C8D8BC]/80 hover:border-[#4A7C59]'
+                  }`}
+                >
+                  <button type="button" className="shrink-0 mt-0.5 text-[#4A7C59]">
+                    {isDone ? <CheckSquare size={16} /> : <Square size={16} />}
+                  </button>
+                  <span className="text-xs leading-relaxed font-medium">{tip}</span>
+                </li>
+              );
+            })}
           </ul>
         </div>
 
-        {/* EMERGENCY ACTION BUTTONS */}
+        {/* 5. NEARBY HAZARDS & CITIZEN MAP */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-xs font-bold text-[#0F2018]">
+            <span>Nearby Hazards & Citizen Map</span>
+            <span className="text-[11px] font-normal text-[#1A3028]">3 km surveillance radius</span>
+          </div>
+          <CitizenMap
+            userCoordinates={{ lat: currentCoords.lat, lon: currentCoords.lon }}
+            locationName={currentCoords.name || 'Your Location'}
+            riskLevel={risk.level || 'MODERATE'}
+            riskScore={typeof risk.score === 'number' ? risk.score : 45}
+            nearbyHazards={riskData?.nearbyHazards || []}
+            citizenReports={citizenReports}
+            height="260px"
+          />
+        </div>
+
+        {/* 9. SHARE MY SAFETY GPS & EMERGENCY SOS ACTION BUTTONS */}
         <div className="p-4 rounded-2xl bg-rose-50 border border-rose-300 space-y-2.5">
           <div className="flex items-center justify-between">
             <span className="text-xs font-black text-rose-900 flex items-center gap-1.5">
               <span>🆘</span> Emergency Distress Action
             </span>
-            <span className="text-[10px] text-rose-700 font-bold">Toll-Free 24x7</span>
+            <span className="text-[10px] text-rose-700 font-bold">24x7 Toll-Free</span>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <a
               href="tel:112"
               className="py-2.5 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all text-center"
@@ -479,10 +647,17 @@ export function CitizenDashboard() {
               <Share2 size={14} />
               <span>Share My Safety GPS</span>
             </button>
+
+            <button
+              onClick={handleWhatsAppShare}
+              className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all"
+            >
+              <span>WhatsApp SOS</span>
+            </button>
           </div>
         </div>
 
-        {/* COMMUNITY GROUND REPORTS FEED */}
+        {/* COMMUNITY GROUND HAZARD REPORTS FEED */}
         <div className="card p-4 space-y-3 bg-white border border-[#C8D8BC]">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-[#0F2018] uppercase tracking-wider">
@@ -527,7 +702,7 @@ export function CitizenDashboard() {
         </div>
       </main>
 
-      {/* LOCATION PICKER MODAL WITH NER BOUNDARY ENFORCEMENT */}
+      {/* 8. LOCATION PICKER MODAL WITH VOICE SEARCH */}
       {showLocationPicker && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
           <div className="bg-white rounded-2xl border border-[#C8D8BC] shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[85vh]">
@@ -565,15 +740,31 @@ export function CitizenDashboard() {
             })()}
 
             <div className="p-3 border-b border-[#C8D8BC] space-y-2">
-              <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search NER district, town, or mountain pass..."
-                  value={locationSearch}
-                  onChange={(e) => setLocationSearch(e.target.value)}
-                  className="w-full pl-8 pr-3 py-2 rounded-xl border border-[#C8D8BC] text-xs text-[#0F2018] focus:outline-none focus:border-[#4A7C59]"
-                />
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search NER district, town, or mountain pass..."
+                    value={locationSearch}
+                    onChange={(e) => setLocationSearch(e.target.value)}
+                    className="w-full pl-8 pr-3 py-2 rounded-xl border border-[#C8D8BC] text-xs text-[#0F2018] focus:outline-none focus:border-[#4A7C59]"
+                  />
+                </div>
+
+                {/* Voice Search Button */}
+                <button
+                  type="button"
+                  onClick={toggleVoiceSearch}
+                  className={`p-2 rounded-xl border transition-all ${
+                    isListeningVoiceSearch
+                      ? 'bg-rose-100 text-rose-700 border-rose-300 animate-pulse'
+                      : 'bg-white border-[#C8D8BC] text-[#4A7C59] hover:bg-[#FAF7F2]'
+                  }`}
+                  title="Voice search location"
+                >
+                  <Mic size={15} />
+                </button>
               </div>
 
               {/* State Filter Pills */}
@@ -640,7 +831,7 @@ export function CitizenDashboard() {
         </div>
       )}
 
-      {/* MODALS */}
+      {/* ALL MODALS */}
       <ReportHazardModal
         isOpen={showReportModal}
         onClose={() => setShowReportModal(false)}
@@ -661,7 +852,19 @@ export function CitizenDashboard() {
         locations={riskData?.saferLocations || riskData?.potentialSaferLocations || []}
         currentLocationName={currentCoords.name || 'Your Location'}
       />
+
+      {/* 10. CRITICAL EMERGENCY MODE MODAL */}
+      <EmergencyModeModal
+        isOpen={showEmergencyModal}
+        onClose={() => setShowEmergencyModal(false)}
+        userCoordinates={currentCoords}
+        riskLevel={risk.level}
+        riskScore={typeof risk.score === 'number' ? risk.score : 45}
+        nearestCatchmentName={nearestCatchment.name}
+        saferLocation={riskData?.potentialSaferLocations?.[0]}
+      />
     </div>
   );
 }
+
 export default CitizenDashboard;

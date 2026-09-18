@@ -7,6 +7,8 @@ import { ProtectedRoute } from './components/shared/ProtectedRoute';
 import { Spinner } from './components/shared/Badges';
 
 // Dedicated Full-Featured Pages
+import DualEntryLanding from './pages/DualEntryLanding';
+import CitizenAuth from './pages/citizen/CitizenAuth';
 import Login from './pages/Login';
 import CitizenWelcome from './pages/citizen/CitizenWelcome';
 import CitizenDashboard from './pages/citizen/CitizenDashboard';
@@ -62,50 +64,19 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Dual Entry Landing Screen (/) as specified in user workflow */}
+        <Route path="/" element={<DualEntryLanding />} />
+
+        {/* Citizen Workflow */}
+        <Route path="/citizen/auth" element={<CitizenAuth />} />
+        <Route path="/citizen/login" element={<CitizenAuth />} />
+        <Route path="/citizen/welcome" element={<CitizenWelcome />} />
+        <Route path="/citizen/dashboard" element={<CitizenDashboard />} />
+        <Route path="/citizen" element={<CitizenWelcome />} />
+
+        {/* Protected Authority Workflow */}
+        <Route path="/authority/login" element={<Login />} />
         <Route path="/login" element={<Login />} />
-
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              {activePortal === 'citizen' ? (
-                <CitizenWelcome />
-              ) : (
-                <AppLayout>
-                  <CommandCenter />
-                </AppLayout>
-              )}
-            </ProtectedRoute>
-          }
-        />
-
-        {/* Multi-Page Citizen Experience */}
-        <Route
-          path="/citizen"
-          element={
-            <ProtectedRoute>
-              <CitizenWelcome />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/citizen/welcome"
-          element={
-            <ProtectedRoute>
-              <CitizenWelcome />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/citizen/dashboard"
-          element={
-            <ProtectedRoute>
-              <CitizenDashboard />
-            </ProtectedRoute>
-          }
-        />
 
         <Route
           path="/authority"
