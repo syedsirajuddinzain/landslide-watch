@@ -1,16 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import {
-  X,
-  Camera,
-  MapPin,
-  Send,
-  CheckCircle2,
-  Mic,
-  MicOff,
-  Volume2,
-  Trash2,
-  Sparkles,
-} from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { X, Camera, Mic, MicOff, MapPin, Send, CheckCircle2, RotateCw, Video, AlertTriangle } from 'lucide-react';
 import api, { saveStoredCitizenReport } from '../../lib/api';
 import { CitizenHazardReport, HazardObservationType } from '../../types';
 
@@ -22,14 +11,14 @@ interface ReportHazardModalProps {
 }
 
 const OBSERVATIONS: Array<{ type: HazardObservationType; label: string; icon: string }> = [
+  { type: 'LANDSLIDE', label: 'Landslide / Active Slip', icon: '⛰️' },
   { type: 'ROAD_BLOCKED', label: 'Road Blocked / Cut', icon: '🚧' },
+  { type: 'FALLING_ROCKS', label: 'Falling Rocks / Rockfall', icon: '🪨' },
   { type: 'MUD_DEBRIS', label: 'Mud & Debris Flow', icon: '🌊' },
-  { type: 'FALLING_ROCKS', label: 'Falling Rocks / Boulders', icon: '🪨' },
   { type: 'GROUND_CRACKS', label: 'Ground / Hillside Cracks', icon: '⚡' },
-  { type: 'UNUSUAL_WATER_FLOW', label: 'New Spring / Muddy Water', icon: '💧' },
-  { type: 'BUILDING_DAMAGE', label: 'Tilted Trees / Wall Cracks', icon: '🏚️' },
-  { type: 'LANDSLIDE', label: 'Active Landslide / Slip', icon: '⛰️' },
-  { type: 'OTHER', label: 'Other Hazard', icon: '⚠️' },
+  { type: 'UNUSUAL_WATER_FLOW', label: 'Unusual Water / Muddy Surge', icon: '💧' },
+  { type: 'BUILDING_DAMAGE', label: 'Damaged Building / Walls', icon: '🏚️' },
+  { type: 'OTHER', label: 'Damaged Bridge / Other', icon: '🌉' },
 ];
 
 export function ReportHazardModal({
@@ -38,119 +27,86 @@ export function ReportHazardModal({
   userCoordinates,
   onReportSubmitted,
 }: ReportHazardModalProps) {
-  const [selectedType, setSelectedType] = useState<HazardObservationType>('ROAD_BLOCKED');
+  const [selectedType, setSelectedType] = useState<HazardObservationType>('LANDSLIDE');
   const [description, setDescription] = useState('');
   const [reporterName, setReporterName] = useState('');
   const [reporterPhone, setReporterPhone] = useState('');
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-
-  // Audio Recording (Mic) State
-  const [isRecordingAudio, setIsRecordingAudio] = useState(false);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [recordSeconds, setRecordSeconds] = useState(0);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const timerRef = useRef<any>(null);
-
-  // Voice Dictation (Speech to Text) State
-  const [isListeningSpeech, setIsListeningSpeech] = useState(false);
-  const recognitionRef = useRef<any>(null);
-
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  // Setup Speech Recognition
-  useEffect(() => {
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-IN';
+  // Live Camera state
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [cameraFacing, setCameraFacing] = useState<'environment' | 'user'>('environment');
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
-      recognition.onresult = (event: any) => {
-        let transcript = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
-        }
-        if (transcript) {
-          setDescription((prev) => (prev ? `${prev} ${transcript}` : transcript));
-        }
-      };
+  // Microphone state
+  const [isListening, setIsListening] = useState(false);
+  const [speechError, setSpeechError] = useState<string | null>(null);
+  const recognitionRef = useRef<any>(null);
 
-      recognition.onerror = () => {
-        setIsListeningSpeech(false);
-      };
-
-      recognition.onend = () => {
-        setIsListeningSpeech(false);
-      };
-
-      recognitionRef.current = recognition;
+  // Safe camera stop helper
+  const stopCamera = useCallback(() => {
+    if (streamRef.current) {
+      try {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      } catch {}
+      streamRef.current = null;
     }
+    setIsCameraActive(false);
   }, []);
 
-  if (!isOpen) return null;
-
-  // Toggle Voice Dictation (Speech to Text)
-  const toggleSpeechDictation = () => {
-    if (!recognitionRef.current) {
-      alert('Speech-to-text is not supported in this browser. Please type your notes or record an audio note.');
-      return;
-    }
-    if (isListeningSpeech) {
-      recognitionRef.current.stop();
-      setIsListeningSpeech(false);
-    } else {
-      try {
-        recognitionRef.current.start();
-        setIsListeningSpeech(true);
-      } catch {
-        setIsListeningSpeech(false);
+  // Cleanup camera and speech on modal close or unmount
+  useEffect(() => {
+    return () => {
+      stopCamera();
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch {}
       }
-    }
-  };
+    };
+  }, [stopCamera]);
 
-  // Start Mic Audio Recording
-  const startAudioRecording = async () => {
+  // Start live device camera viewfinder
+  const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioChunksRef.current = [];
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          audioChunksRef.current.push(e.data);
-        }
-      };
-
-      mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        const url = URL.createObjectURL(audioBlob);
-        setAudioUrl(url);
-        stream.getTracks().forEach((track) => track.stop());
-      };
-
-      mediaRecorder.start();
-      setIsRecordingAudio(true);
-      setRecordSeconds(0);
-      timerRef.current = setInterval(() => {
-        setRecordSeconds((s) => s + 1);
-      }, 1000);
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: cameraFacing },
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+      setIsCameraActive(true);
     } catch {
-      alert('Microphone permission denied or audio device not available.');
+      // If camera access is denied or not supported, user can still use file input
+      setIsCameraActive(false);
     }
   };
 
-  // Stop Mic Audio Recording
-  const stopAudioRecording = () => {
-    if (mediaRecorderRef.current && isRecordingAudio) {
-      mediaRecorderRef.current.stop();
-      setIsRecordingAudio(false);
-      if (timerRef.current) clearInterval(timerRef.current);
+  const snapPhoto = () => {
+    if (!videoRef.current) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = videoRef.current.videoWidth || 640;
+    canvas.height = videoRef.current.videoHeight || 480;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      setPhotoPreview(dataUrl);
     }
+    stopCamera();
+  };
+
+  const switchCameraFacing = () => {
+    const nextFacing = cameraFacing === 'environment' ? 'user' : 'environment';
+    setCameraFacing(nextFacing);
+    setTimeout(() => startCamera(), 100);
   };
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -164,9 +120,62 @@ export function ReportHazardModal({
     }
   };
 
+  // Microphone Speech-to-Text
+  const toggleVoiceRecording = () => {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      setSpeechError('Speech recognition is not supported by your browser.');
+      return;
+    }
+
+    if (isListening) {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognitionRef.current = recognition;
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-IN'; // Indian English / general
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        setSpeechError(null);
+      };
+
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        setDescription((prev) => (prev ? `${prev} ${transcript}` : transcript));
+        setIsListening(false);
+      };
+
+      recognition.onerror = (event: any) => {
+        setSpeechError(`Voice input: ${event.error || 'Could not understand audio'}`);
+        setIsListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognition.start();
+    } catch {
+      setSpeechError('Microphone access unavailable');
+      setIsListening(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    stopCamera();
 
     const newReport: CitizenHazardReport = {
       id: 'cr-' + Date.now(),
@@ -177,9 +186,9 @@ export function ReportHazardModal({
       locationName: userCoordinates.name || 'NER Mountain Corridor',
       nearestCatchmentName: userCoordinates.name || 'NER Region',
       observationType: selectedType,
-      description: description.trim() + (audioUrl ? ' [Voice Note Attached]' : ''),
+      description: description.trim(),
       photoUrl: photoPreview || undefined,
-      userName: reporterName.trim() || 'Local Citizen',
+      userName: reporterName.trim() || 'Citizen Observer',
       userPhone: reporterPhone.trim() || undefined,
       status: 'SUBMITTED',
       createdAt: new Date().toISOString(),
@@ -188,7 +197,6 @@ export function ReportHazardModal({
     try {
       await api.post('/api/citizen/reports', newReport);
     } catch {
-      // Offline fallback: save in local storage
       saveStoredCitizenReport(newReport);
     }
 
@@ -202,23 +210,28 @@ export function ReportHazardModal({
     }, 2000);
   };
 
+  if (!isOpen) return null;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in font-sans">
-      <div className="bg-white rounded-3xl border border-[#C8D8BC] shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+      <div className="bg-white rounded-3xl border border-[#C8D8BC] shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="px-5 py-4 border-b border-[#C8D8BC] bg-[#F5F0E8] flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <span className="p-2 rounded-xl bg-amber-100 text-amber-900 text-base shadow-xs">🚨</span>
+          <div className="flex items-center gap-2">
+            <span className="p-1.5 rounded-xl bg-amber-100 text-amber-900 text-base">🚨</span>
             <div>
-              <h2 className="text-sm font-black text-[#0F2018]">Report a Ground Hazard</h2>
-              <p className="text-[11px] text-[#1A3028]">
-                Dispatches GPS, Camera photo, and Voice note to Disaster Control Room
+              <h2 className="text-sm font-black text-[#0F2018]">REPORT A GROUND HAZARD</h2>
+              <p className="text-[11px] text-[#2C4A3E]">
+                Dispatches GPS evidence to District Disaster Emergency Centers
               </p>
             </div>
           </div>
           <button
-            onClick={onClose}
-            className="p-1.5 rounded-xl text-[#1A3028] hover:bg-[#C8D8BC]/40 transition-colors"
+            onClick={() => {
+              stopCamera();
+              onClose();
+            }}
+            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 transition-colors"
           >
             <X size={18} />
           </button>
@@ -226,194 +239,202 @@ export function ReportHazardModal({
 
         {isSuccess ? (
           <div className="p-8 text-center space-y-3">
-            <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto shadow-xs">
+            <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto shadow-sm">
               <CheckCircle2 size={32} />
             </div>
-            <h3 className="text-base font-black text-[#0F2018]">Hazard Report Submitted!</h3>
-            <p className="text-xs text-[#1A3028] max-w-xs mx-auto leading-relaxed">
-              Thank you for keeping your community safe. Your report has been dispatched to local authorities and pinned on the surrounding hazard map.
+            <h3 className="text-base font-bold text-[#0F2018]">Report Dispatched Successfully!</h3>
+            <p className="text-xs text-[#2C4A3E] max-w-xs mx-auto">
+              Your photo and GPS location coordinates have been submitted. Local disaster management authorities will review the signal for ground verification.
             </p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="p-5 overflow-y-auto space-y-4 flex-1">
-            {/* Live GPS Stamp */}
+          <form onSubmit={handleSubmit} className="p-5 overflow-y-auto space-y-4 flex-1 scrollbar-thin">
+            {/* Auto-attached Location Badge */}
             <div className="p-3 rounded-2xl bg-[#F5F0E8] border border-[#C8D8BC] flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2 text-[#0F2018] font-bold">
-                <MapPin size={15} className="text-[#4A7C59] shrink-0" />
-                <span className="truncate max-w-[240px]">
-                  {userCoordinates.name || `${userCoordinates.lat.toFixed(4)}°N, ${userCoordinates.lon.toFixed(4)}°E`}
-                </span>
+              <div className="flex items-center gap-2">
+                <MapPin size={16} className="text-[#4A7C59] shrink-0" />
+                <div>
+                  <div className="font-bold text-[#0F2018]">{userCoordinates.name || 'NER Location'}</div>
+                  <div className="text-[10px] text-slate-500 font-mono">
+                    GPS: {userCoordinates.lat.toFixed(4)}°N, {userCoordinates.lon.toFixed(4)}°E
+                  </div>
+                </div>
               </div>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#4A7C59]/20 text-[#4A7C59]">
-                GPS Attached
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300">
+                GPS Locked
               </span>
             </div>
 
-            {/* Observation Type Grid */}
-            <div>
-              <label className="block text-xs font-black text-[#0F2018] mb-2">
-                What are you observing? *
+            {/* CAMERA SECTION: Live Camera Viewfinder + Photo Evidence */}
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-[#0F2018]">
+                Camera Photo Evidence
               </label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {OBSERVATIONS.map((obs) => (
-                  <button
-                    key={obs.type}
-                    type="button"
-                    onClick={() => setSelectedType(obs.type)}
-                    className={`p-2.5 rounded-xl border text-left flex flex-col items-center text-center gap-1 transition-all ${
-                      selectedType === obs.type
-                        ? 'border-[#4A7C59] bg-[#4A7C59]/15 text-[#0F2018] font-bold shadow-xs'
-                        : 'border-[#C8D8BC] hover:border-[#4A7C59] text-[#1A3028]'
-                    }`}
-                  >
-                    <span className="text-lg">{obs.icon}</span>
-                    <span className="text-[10px] leading-tight font-medium">{obs.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
 
-            {/* TWO INPUT MODES: CAMERA PHOTO + MIC AUDIO MEMO */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {/* 1. CAMERA PHOTO */}
-              <div>
-                <label className="block text-xs font-bold text-[#0F2018] mb-1.5">
-                  📷 Camera Photo
-                </label>
-                {photoPreview ? (
-                  <div className="relative rounded-2xl overflow-hidden border border-[#C8D8BC] h-28 bg-black/10">
-                    <img
-                      src={photoPreview}
-                      alt="Uploaded preview"
-                      className="w-full h-full object-cover"
-                    />
+              {isCameraActive ? (
+                <div className="relative rounded-2xl overflow-hidden bg-black aspect-video flex flex-col justify-between border-2 border-emerald-500">
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute top-2 right-2 flex gap-1.5 z-10">
                     <button
                       type="button"
-                      onClick={() => setPhotoPreview(null)}
-                      className="absolute top-1.5 right-1.5 p-1 rounded-full bg-black/70 text-white hover:bg-black"
+                      onClick={switchCameraFacing}
+                      className="p-2 rounded-xl bg-black/60 text-white hover:bg-black/80"
+                      title="Switch camera"
                     >
-                      <X size={12} />
+                      <RotateCw size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={stopCamera}
+                      className="p-2 rounded-xl bg-black/60 text-white hover:bg-black/80"
+                      title="Close viewfinder"
+                    >
+                      <X size={14} />
                     </button>
                   </div>
-                ) : (
-                  <label className="flex flex-col items-center justify-center border-2 border-dashed border-[#C8D8BC] hover:border-[#4A7C59] rounded-2xl p-3.5 cursor-pointer transition-colors bg-[#FAF7F2] h-28">
-                    <Camera size={22} className="text-[#4A7C59] mb-1" />
-                    <span className="text-[11px] font-bold text-[#0F2018]">Attach Photo</span>
-                    <span className="text-[9px] text-[#1A3028]">Cracks, road block, slide</span>
+                  <div className="absolute bottom-3 left-0 right-0 flex justify-center z-10">
+                    <button
+                      type="button"
+                      onClick={snapPhoto}
+                      className="px-5 py-2.5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xs shadow-lg flex items-center gap-2"
+                    >
+                      <Camera size={16} />
+                      <span>SNAP PHOTO</span>
+                    </button>
+                  </div>
+                </div>
+              ) : photoPreview ? (
+                <div className="relative rounded-2xl overflow-hidden border border-[#C8D8BC] aspect-video">
+                  <img src={photoPreview} alt="Captured hazard" className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => setPhotoPreview(null)}
+                    className="absolute top-2 right-2 p-1.5 rounded-xl bg-black/70 text-white hover:bg-black text-xs font-bold flex items-center gap-1 shadow-md"
+                  >
+                    <X size={14} />
+                    <span>Retake</span>
+                  </button>
+                  <div className="absolute bottom-2 left-2 px-2.5 py-1 rounded-md bg-black/70 text-white text-[10px] font-mono">
+                    Evidence Attached
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={startCamera}
+                    className="py-3 px-3 rounded-2xl border-2 border-dashed border-[#C8D8BC] hover:border-[#4A7C59] bg-[#FAF7F2] text-xs font-bold text-[#0F2018] flex flex-col items-center justify-center gap-1 transition-all"
+                  >
+                    <Camera size={20} className="text-[#4A7C59]" />
+                    <span>Open Live Camera</span>
+                  </button>
+
+                  <label className="py-3 px-3 rounded-2xl border-2 border-dashed border-[#C8D8BC] hover:border-[#4A7C59] bg-[#FAF7F2] text-xs font-bold text-[#0F2018] flex flex-col items-center justify-center gap-1 transition-all cursor-pointer">
+                    <Video size={20} className="text-amber-700" />
+                    <span>Upload Image</span>
                     <input
                       type="file"
                       accept="image/*"
+                      capture="environment"
                       onChange={handlePhotoUpload}
                       className="hidden"
                     />
                   </label>
-                )}
-              </div>
+                </div>
+              )}
+            </div>
 
-              {/* 2. MIC AUDIO VOICE NOTE */}
-              <div>
-                <label className="block text-xs font-bold text-[#0F2018] mb-1.5">
-                  🎙️ Mic Voice Note
-                </label>
-                {audioUrl ? (
-                  <div className="h-28 p-3 rounded-2xl border border-emerald-300 bg-emerald-50 flex flex-col justify-between">
-                    <div className="flex items-center justify-between text-[11px] font-bold text-emerald-900">
-                      <span className="flex items-center gap-1">
-                        <Volume2 size={13} />
-                        <span>Voice Note Ready</span>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setAudioUrl(null)}
-                        className="text-rose-600 hover:text-rose-800"
-                        title="Delete voice note"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                    <audio src={audioUrl} controls className="w-full h-8" />
-                    <div className="text-[9px] text-emerald-700">Audio will be dispatched to NDRF</div>
-                  </div>
-                ) : isRecordingAudio ? (
-                  <div className="h-28 p-3 rounded-2xl border-2 border-rose-400 bg-rose-50 flex flex-col items-center justify-center text-center space-y-1.5 animate-pulse">
-                    <div className="w-3 h-3 rounded-full bg-rose-600 animate-ping"></div>
-                    <div className="text-xs font-black text-rose-900">
-                      Recording Audio... {recordSeconds}s
-                    </div>
+            {/* Select Hazard Type */}
+            <div>
+              <label className="block text-xs font-bold text-[#0F2018] mb-1.5">
+                Select Observed Hazard Type
+              </label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {OBSERVATIONS.map((obs) => {
+                  const isSelected = selectedType === obs.type;
+                  return (
                     <button
+                      key={obs.type}
                       type="button"
-                      onClick={stopAudioRecording}
-                      className="px-3 py-1 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs"
+                      onClick={() => setSelectedType(obs.type)}
+                      className={`p-2.5 rounded-xl border text-left flex items-center gap-2 transition-all ${
+                        isSelected
+                          ? 'border-[#4A7C59] bg-emerald-50 text-[#0F2018] font-bold shadow-xs'
+                          : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
+                      }`}
                     >
-                      Stop & Save Memo
+                      <span className="text-base">{obs.icon}</span>
+                      <span className="text-xs truncate">{obs.label}</span>
                     </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={startAudioRecording}
-                    className="w-full h-28 flex flex-col items-center justify-center border-2 border-dashed border-[#C8D8BC] hover:border-[#4A7C59] rounded-2xl p-3.5 transition-colors bg-[#FAF7F2]"
-                  >
-                    <Mic size={22} className="text-[#4A7C59] mb-1" />
-                    <span className="text-[11px] font-bold text-[#0F2018]">Record Voice Note</span>
-                    <span className="text-[9px] text-[#1A3028]">Speak details into microphone</span>
-                  </button>
-                )}
+                  );
+                })}
               </div>
             </div>
 
-            {/* Description with Voice Dictation */}
+            {/* MICROPHONE VOICE REPORTING + Description */}
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-bold text-[#0F2018]">
-                  Hazard Description / Notes
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-bold text-[#0F2018]">
+                  Hazard Description
                 </label>
                 <button
                   type="button"
-                  onClick={toggleSpeechDictation}
-                  className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border transition-all ${
-                    isListeningSpeech
-                      ? 'bg-rose-100 text-rose-700 border-rose-300 animate-pulse'
-                      : 'bg-[#FAF7F2] text-[#4A7C59] border-[#C8D8BC] hover:border-[#4A7C59]'
+                  onClick={toggleVoiceRecording}
+                  className={`px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all ${
+                    isListening
+                      ? 'bg-rose-600 text-white animate-pulse'
+                      : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-300'
                   }`}
+                  title="Speak to dictate description"
                 >
-                  <Mic size={11} />
-                  <span>{isListeningSpeech ? 'Listening (Speak now)...' : 'Dictate by Voice'}</span>
+                  {isListening ? <MicOff size={13} /> : <Mic size={13} />}
+                  <span>{isListening ? 'Listening... Tap to stop' : '🎙️ Report by Voice'}</span>
                 </button>
               </div>
+
+              {speechError && (
+                <div className="mb-1 text-[11px] text-rose-600 font-medium">{speechError}</div>
+              )}
+
               <textarea
-                rows={2}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="e.g. Rocks falling 200m past fuel pump, mud overflowing road gutter..."
-                className="w-full p-2.5 rounded-xl border border-[#C8D8BC] text-xs text-[#0F2018] focus:outline-none focus:border-[#4A7C59]"
+                placeholder="Describe what you see (e.g. mud blocking the road near kilometer 14, or new cracks on slope)..."
+                rows={3}
+                className="w-full p-3 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-[#4A7C59] focus:ring-1 focus:ring-[#4A7C59]"
               />
             </div>
 
             {/* Reporter Contact Info */}
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-[11px] font-bold text-[#0F2018] mb-1">
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
                   Your Name (Optional)
                 </label>
                 <input
                   type="text"
                   value={reporterName}
                   onChange={(e) => setReporterName(e.target.value)}
-                  placeholder="Local Citizen"
-                  className="w-full px-3 py-2 rounded-xl border border-[#C8D8BC] text-xs text-[#0F2018] focus:outline-none focus:border-[#4A7C59]"
+                  placeholder="Local resident / traveler"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-[#4A7C59]"
                 />
               </div>
               <div>
-                <label className="block text-[11px] font-bold text-[#0F2018] mb-1">
-                  Phone (Optional)
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  Phone (For Verification)
                 </label>
                 <input
                   type="tel"
                   value={reporterPhone}
                   onChange={(e) => setReporterPhone(e.target.value)}
-                  placeholder="For SMS status"
-                  className="w-full px-3 py-2 rounded-xl border border-[#C8D8BC] text-xs text-[#0F2018] focus:outline-none focus:border-[#4A7C59]"
+                  placeholder="+91 9XXXXXXXXX"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-[#4A7C59]"
                 />
               </div>
             </div>
@@ -423,10 +444,10 @@ export function ReportHazardModal({
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full py-3.5 px-4 rounded-2xl bg-[#4A7C59] hover:bg-[#1A3028] text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm transition-all"
+                className="w-full py-3.5 px-4 rounded-2xl bg-[#4A7C59] hover:bg-[#3B6647] text-white font-black text-xs tracking-wide shadow-md flex items-center justify-center gap-2 transition-all"
               >
-                <Send size={15} />
-                <span>{isSubmitting ? 'Transmitting to NDRF Control...' : 'Transmit Ground Report'}</span>
+                <Send size={16} />
+                <span>{isSubmitting ? 'DISPATCHING REPORT...' : 'SUBMIT HAZARD REPORT'}</span>
               </button>
             </div>
           </form>
@@ -435,5 +456,3 @@ export function ReportHazardModal({
     </div>
   );
 }
-
-export default ReportHazardModal;
