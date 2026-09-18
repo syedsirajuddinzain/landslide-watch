@@ -1,206 +1,126 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { Shield, Eye, EyeOff, AlertTriangle, Building2, ArrowLeft, Lock, UserCheck } from 'lucide-react';
+import { Shield, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 import { Spinner } from '../components/shared/Badges';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [selectedRole, setSelectedRole] = useState('authority');
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
-  const { signIn, loading, user, demoLogin, switchPortal } = useAuthStore();
+  const { signIn, loading, user, demoLogin } = useAuthStore();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (user) navigate('/', { replace: true });
+  }, [user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     try {
-      switchPortal('authority');
       await signIn(email, password);
-      navigate('/authority');
+      navigate('/');
     } catch (err: any) {
-      // Fallback for evaluator testing
-      demoLogin(selectedRole);
-      switchPortal('authority');
-      navigate('/authority');
+      const msg = err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password'
+        ? 'Invalid email or password.' : err.message || 'Sign in failed.';
+      setError(msg);
     }
   };
 
   const fillDemo = (role: string) => {
-    setSelectedRole(role);
     const creds: Record<string, [string, string]> = {
-      authority: ['officer.ndrf@landslidewatch.gov.in', 'Authority@SIH2026'],
-      admin: ['director.sdma@landslidewatch.gov.in', 'Admin@SIH2026'],
-      viewer: ['collector.ddma@landslidewatch.gov.in', 'Viewer@SIH2026'],
+      citizen: ['citizen@landslidewatch.in', 'Citizen@SIH2026'],
+      admin: ['admin@landslidewatch.in', 'Admin@SIH2026'],
+      authority: ['authority@landslidewatch.in', 'Authority@SIH2026'],
+      viewer: ['viewer@landslidewatch.in', 'Viewer@SIH2026'],
     };
-    if (creds[role]) {
-      const [e, p] = creds[role];
-      setEmail(e);
-      setPassword(p);
-    }
-  };
-
-  const handle1ClickAuthority = (role: string = 'authority') => {
-    switchPortal('authority');
-    demoLogin(role);
-    navigate('/authority');
+    const [e, p] = creds[role];
+    setEmail(e); setPassword(p);
   };
 
   return (
-    <div className="min-h-screen bg-[#0F2018] text-white flex flex-col justify-between p-4 sm:p-6 font-sans">
-      {/* Top Header */}
-      <div className="max-w-md mx-auto w-full flex items-center justify-between pt-2">
-        <button
-          onClick={() => navigate('/')}
-          className="flex items-center gap-1.5 text-xs font-bold text-slate-300 hover:text-white px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 transition-all"
-        >
-          <ArrowLeft size={14} />
-          <span>Back to Role Selection</span>
-        </button>
+    <div className="min-h-screen bg-surface flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600 to-blue-800 mb-4 shadow-2xl">
+            <Shield size={32} className="text-white" />
+          </div>
+          <h1 className="text-2xl font-bold text-white">Landslide Watch</h1>
+          <p className="text-slate-400 text-sm mt-1">NER Landslide Risk · SIH26001</p>
+        </div>
 
-        <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-emerald-900/60 text-emerald-300 border border-emerald-500/40">
-          🏛️ Authority Portal
-        </span>
-      </div>
+        {/* Disclaimer */}
+        <div className="bg-amber-900/20 border border-amber-800/50 rounded-lg p-3 mb-6 flex gap-2">
+          <AlertTriangle size={14} className="text-amber-400 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-300">Decision-support system. Risk scores require field validation. Do not issue evacuation orders solely based on this system.</p>
+        </div>
 
-      {/* Main Login Card */}
-      <div className="max-w-md mx-auto w-full my-auto py-6">
-        <div className="bg-[#1A3028] rounded-3xl border border-[#4A7C59]/40 p-6 sm:p-8 shadow-2xl space-y-6">
-          {/* Logo & Headline */}
-          <div className="text-center space-y-2">
-            <div className="w-14 h-14 rounded-2xl bg-[#4A7C59] text-white flex items-center justify-center mx-auto shadow-lg">
-              <Building2 size={28} />
-            </div>
-            <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-              Protected Authority Login
-            </h1>
-            <p className="text-xs text-slate-300 max-w-xs mx-auto">
-              Command Cockpit for NDMA, State SDMAs, District Emergency Operations, & NDRF Battalions.
-            </p>
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="card space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1">Email</label>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+              className="input" placeholder="you@example.com" required autoComplete="email" />
           </div>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-[11px] font-black uppercase tracking-wider text-slate-300 mb-1">
-                Officer ID / Official Email
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-[#0F2018] border border-[#4A7C59]/50 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-emerald-400"
-                placeholder="officer.ndrf@landslidewatch.gov.in"
-                required
-                autoComplete="email"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-black uppercase tracking-wider text-slate-300 mb-1">
-                Password
-              </label>
-              <div className="relative">
-                <input
-                  type={showPw ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#0F2018] border border-[#4A7C59]/50 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-emerald-400 pr-10"
-                  placeholder="••••••••"
-                  required
-                  autoComplete="current-password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPw(!showPw)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
-                >
-                  {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-black uppercase tracking-wider text-slate-300 mb-1">
-                Role-Based Clearance (RBAC)
-              </label>
-              <select
-                value={selectedRole}
-                onChange={(e) => setSelectedRole(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-[#0F2018] border border-[#4A7C59]/50 text-white text-xs focus:outline-none focus:border-emerald-400"
-              >
-                <option value="authority">NDRF / SDRF Incident Commander</option>
-                <option value="admin">SDMA State Disaster Director (Admin)</option>
-                <option value="viewer">DDMA District Emergency Viewer</option>
-              </select>
-            </div>
-
-            {error && (
-              <div className="p-2.5 rounded-xl bg-rose-950/80 border border-rose-600 text-rose-300 text-xs">
-                {error}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 px-4 rounded-xl bg-[#4A7C59] hover:bg-emerald-600 text-white font-black text-xs flex items-center justify-center gap-2 shadow-md transition-all transform active:scale-98"
-            >
-              {loading ? <Spinner size={16} /> : <Lock size={15} />}
-              <span>{loading ? 'Authenticating...' : 'Sign In to Command Center'}</span>
-            </button>
-          </form>
-
-          {/* 1-Click Authority Quick-Fill Buttons */}
-          <div className="pt-2 border-t border-white/10 space-y-2">
-            <div className="text-[10px] font-black uppercase tracking-wider text-[#C8D8BC] flex items-center justify-between">
-              <span>Quick Evaluation Logins</span>
-              <span className="text-slate-400">1-Click</span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => handle1ClickAuthority('authority')}
-                className="p-2 rounded-xl bg-white/5 hover:bg-[#4A7C59]/30 border border-[#4A7C59]/40 text-left transition-colors"
-              >
-                <div className="font-bold text-white text-[11px]">NDRF Officer</div>
-                <div className="text-[9px] text-slate-400">Dispatch & Verify</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handle1ClickAuthority('admin')}
-                className="p-2 rounded-xl bg-white/5 hover:bg-[#4A7C59]/30 border border-[#4A7C59]/40 text-left transition-colors"
-              >
-                <div className="font-bold text-white text-[11px]">SDMA Director</div>
-                <div className="text-[9px] text-slate-400">Full System Admin</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handle1ClickAuthority('viewer')}
-                className="p-2 rounded-xl bg-white/5 hover:bg-[#4A7C59]/30 border border-[#4A7C59]/40 text-left transition-colors"
-              >
-                <div className="font-bold text-white text-[11px]">District DDMA</div>
-                <div className="text-[9px] text-slate-400">Field Observer</div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1">Password</label>
+            <div className="relative">
+              <input type={showPw ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
+                className="input pr-10" placeholder="••••••••" required autoComplete="current-password" />
+              <button type="button" onClick={() => setShowPw(!showPw)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+                {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
               </button>
             </div>
+          </div>
+
+          {error && (
+            <div className="bg-red-900/30 border border-red-800 rounded-lg p-2 text-red-400 text-xs">{error}</div>
+          )}
+
+          <button type="submit" disabled={loading} className="btn-primary w-full flex items-center justify-center gap-2 py-2.5">
+            {loading ? <><Spinner size={16} /> Signing in...</> : 'Sign In'}
+          </button>
+        </form>
+
+        {/* 1-Click Instant Guest / Evaluator Entry */}
+        <div className="mt-4 space-y-2">
+          <button
+            onClick={() => {
+              demoLogin('citizen');
+              navigate('/citizen');
+            }}
+            className="w-full py-2.5 px-4 rounded-xl bg-[#4A7C59] hover:bg-[#1A3028] text-white font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-2 border border-[#7FB99A]/40"
+          >
+            <span>👥 1-Click Entry: Citizen Safety View ("Am I safe?")</span>
+          </button>
+          <button
+            onClick={() => {
+              demoLogin('authority');
+              navigate('/');
+            }}
+            className="w-full py-2.5 px-4 rounded-xl bg-[#1A3028] hover:bg-[#0F2018] text-white font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-2 border border-[#C8D8BC]/40"
+          >
+            <span>🛡️ 1-Click Entry: Disaster Authority Cockpit (GIS & SOP)</span>
+          </button>
+        </div>
+
+        {/* Demo quick-fill */}
+        <div className="mt-4 card">
+          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Demo Accounts</div>
+          <div className="grid grid-cols-4 gap-2">
+            {['citizen', 'authority', 'admin', 'viewer'].map(role => (
+              <button key={role} onClick={() => fillDemo(role)}
+                className="text-xs py-1.5 px-2 rounded bg-surface hover:bg-surface-card border border-surface-border text-slate-300 hover:text-white capitalize transition-colors">
+                {role}
+              </button>
+            ))}
           </div>
         </div>
-      </div>
-
-      {/* Footer */}
-      <div className="text-center text-xs text-slate-400 pb-2">
-        Are you a citizen or traveler?{' '}
-        <button
-          onClick={() => navigate('/citizen/auth')}
-          className="font-bold text-emerald-400 hover:underline"
-        >
-          Switch to Citizen Portal →
-        </button>
       </div>
     </div>
   );

@@ -86,26 +86,37 @@ export function CitizenDashboard({ initialWelcome = false }: CitizenDashboardPro
       setIsLoadingRisk(true);
       try {
         const res = await api.get(`/api/citizen/risk-at-location?lat=${currentCoords.lat}&lon=${currentCoords.lon}`);
-        if (isMounted && res.data?.success && res.data?.data) {
-          const backendData = res.data.data;
-          setRiskData({
-            currentRisk: backendData.currentRisk,
-            nearestCatchment: backendData.nearestCatchment,
-            breakdownCards: backendData.breakdownCards,
-            actionTips: backendData.actionTips,
-            warningSigns: backendData.warningSigns || [
-              'New ground cracks appearing on slopes or foundations',
-              'Sudden murky or brown water flow in roadside drains',
-              'Tilting trees, utility poles, or retaining walls',
-              'Hollow rumbling noises or falling gravel from slopes',
-            ],
-            currentConditions: backendData.currentConditions,
-            nearbyHazards: backendData.nearbyHazards,
-            potentialSaferLocations: backendData.potentialSaferLocations,
-            freshnessMetadata: {
-              rainfall: backendData.currentRisk?.freshness || 'LIVE — Open-Meteo telemetry synced',
-            },
-          });
+        if (isMounted && res.data?.success) {
+          if (res.data.isWithinNER === false) {
+            setRiskData({
+              isWithinNER: false,
+              message: res.data.message,
+              coordinates: res.data.coordinates,
+              nearestCatchment: res.data.nearestCatchment,
+              distanceToNearestCatchmentKm: res.data.distanceToNearestCatchmentKm,
+            });
+          } else if (res.data.data) {
+            const backendData = res.data.data;
+            setRiskData({
+              isWithinNER: true,
+              currentRisk: backendData.currentRisk,
+              nearestCatchment: backendData.nearestCatchment,
+              breakdownCards: backendData.breakdownCards,
+              actionTips: backendData.actionTips,
+              warningSigns: backendData.warningSigns || [
+                'New ground cracks appearing on slopes or foundations',
+                'Sudden murky or brown water flow in roadside drains',
+                'Tilting trees, utility poles, or retaining walls',
+                'Hollow rumbling noises or falling gravel from slopes',
+              ],
+              currentConditions: backendData.currentConditions,
+              nearbyHazards: backendData.nearbyHazards,
+              potentialSaferLocations: backendData.potentialSaferLocations,
+              freshnessMetadata: {
+                rainfall: backendData.currentRisk?.freshness || 'LIVE — Open-Meteo telemetry synced',
+              },
+            });
+          }
         }
       } catch {
         if (isMounted) {
@@ -157,10 +168,22 @@ export function CitizenDashboard({ initialWelcome = false }: CitizenDashboardPro
           }
         }
 
-        const name = minD < 15 ? `${nearest.name}, ${nearest.state}` : `Near ${nearest.name} (${Math.round(minD)} km)`;
+        const isWithinNER =
+          lat >= 21.5 && lat <= 29.5 &&
+          lon >= 88.0 && lon <= 97.5 &&
+          minD <= 120;
+
+        const name = isWithinNER
+          ? (minD < 15 ? `${nearest.name}, ${nearest.state}` : `${nearest.name} Region, ${nearest.state}`)
+          : `GPS: ${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E (Out of Region)`;
+
         setUserLocation({ lat, lon, name });
         setShowLocationPicker(false);
-        showToast('📍 Updated to your live GPS coordinates');
+        showToast(
+          isWithinNER
+            ? '📍 Updated to your live GPS coordinates'
+            : '📍 Live GPS located (Outside Northeast India coverage area)'
+        );
       },
       () => {
         setIsLocatingGPS(false);
@@ -184,7 +207,7 @@ export function CitizenDashboard({ initialWelcome = false }: CitizenDashboardPro
 
   const handleShareLocation = () => {
     const risk = riskData.currentRisk;
-    const shareText = `⚠️ LANDSLIDE WATCH SAFETY ALERT: I am currently near ${currentCoords.name} (GPS: ${currentCoords.lat.toFixed(4)}, ${currentCoords.lon.toFixed(4)}). Current assessed risk: ${risk.level} (${risk.score}/100). Please check on my safety. (Disaster Emergency 112)`;
+    const shareText = `⚠️ LANDSLIDE WATCH SAFETY STATUS: I am currently near ${currentCoords.name} (GPS: ${currentCoords.lat.toFixed(4)}, ${currentCoords.lon.toFixed(4)}). Current assessed risk: ${risk?.level || 'MONITORED'} (${risk?.score || '--'}/100). Please check on my safety. (Disaster Emergency 112)`;
 
     if (navigator.share) {
       navigator
@@ -201,14 +224,14 @@ export function CitizenDashboard({ initialWelcome = false }: CitizenDashboardPro
   };
 
   const risk = riskData?.currentRisk || {
-    score: 56.6,
-    level: 'HIGH',
-    headline: 'High Landslide Risk Detected in Surrounding Corridor',
-    explanation: 'Subsurface soil saturation along steep hillside slopes.',
+    score: 0,
+    level: 'LOW',
+    headline: 'Retrieving live risk assessment...',
+    explanation: 'Fetching dynamic telemetry from Open-Meteo weather API...',
   };
   const isCritical = risk.level === 'CRITICAL';
   const isHigh = risk.level === 'HIGH';
-  const displayScore = typeof risk.score === 'number' && !isNaN(risk.score) ? risk.score.toFixed(1) : '56.6';
+  const displayScore = typeof risk.score === 'number' && !isNaN(risk.score) && risk.score > 0 ? risk.score.toFixed(1) : '--.-';
 
   const riskBadgeColor = isCritical
     ? 'bg-rose-600 text-white border-rose-700'
@@ -336,48 +359,6 @@ export function CitizenDashboard({ initialWelcome = false }: CitizenDashboardPro
           </div>
         </div>
 
-        {/* SECTION 7: PRIMARY "YOUR CURRENT RISK" CARD */}
-        <div className={`p-5 rounded-3xl border-2 ${riskCardBorder} shadow-sm space-y-3.5 transition-all`}>
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-black uppercase tracking-wider text-[#2C4A3E]">
-              YOUR CURRENT RISK
-            </span>
-            <span className={`text-[11px] font-black uppercase px-3 py-1 rounded-full border ${riskBadgeColor}`}>
-              ● {risk.level}
-            </span>
-          </div>
-
-          <div className="flex items-baseline justify-between">
-            <div className="text-3xl sm:text-4xl font-black font-mono text-[#0F2018] tracking-tight">
-              {displayScore}
-              <span className="text-sm text-[#2C4A3E] font-mono font-medium"> / 100</span>
-            </div>
-            <div className="text-right text-[11px] text-slate-500 font-medium">
-              Nearest Catchment: <span className="font-bold text-[#0F2018]">{riskData.nearestCatchment?.name}</span>
-            </div>
-          </div>
-
-          <div>
-            <h2 className="text-base sm:text-lg font-black text-[#0F2018] leading-snug">
-              {risk.headline}
-            </h2>
-            <p className="text-xs text-[#2C4A3E] font-medium mt-1 leading-relaxed">
-              {risk.explanation}
-            </p>
-          </div>
-
-          {/* Real-time Data Freshness Badge */}
-          <div className="pt-3 border-t border-[#C8D8BC]/60 flex items-center justify-between text-[10px] text-slate-500">
-            <div className="flex items-center gap-1.5 font-medium">
-              <Clock size={12} className="text-[#4A7C59]" />
-              <span>{riskData.freshnessMetadata?.rainfall}</span>
-            </div>
-            <span className="font-mono font-semibold">
-              Updated just now
-            </span>
-          </div>
-        </div>
-
         {/* 4 ACTION SHORTCUTS (Trip, Report, Safer Ground, Emergency) */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
           <button
@@ -432,6 +413,111 @@ export function CitizenDashboard({ initialWelcome = false }: CitizenDashboardPro
             <div className="text-[10px] text-slate-500">Call 112 & Share GPS</div>
           </button>
         </div>
+
+        {/* OUT-OF-REGION NOTICE (When location is outside Northeast India) */}
+        {riskData?.isWithinNER === false ? (
+          <div className="p-6 rounded-3xl bg-white border-2 border-amber-300 shadow-sm space-y-5">
+            <div className="flex items-start gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-amber-100 border border-amber-300 text-amber-800 flex items-center justify-center shrink-0">
+                <Compass size={24} />
+              </div>
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                  Regional Boundary Notice
+                </span>
+                <h2 className="text-base sm:text-lg font-black text-[#0F2018] mt-1 leading-snug">
+                  Landslide Watch is currently designed for landslide-risk monitoring in Northeast India.
+                </h2>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-[#FAF7F2] border border-[#C8D8BC] space-y-2 text-xs text-[#2C4A3E] leading-relaxed">
+              <p className="font-semibold text-[#0F2018]">
+                We don't currently have sufficient regional data to provide a reliable assessment for your location ({currentCoords.name}).
+              </p>
+              <p>
+                Our high-resolution multi-factor risk engine currently ingests terrain, geological fault lines, hydrological catchments, and real-time precipitation specifically calibrated across the 8 Northeast Indian States (Arunachal Pradesh, Assam, Manipur, Meghalaya, Mizoram, Nagaland, Sikkim, and Tripura).
+              </p>
+              <div className="pt-2 border-t border-[#C8D8BC]/60 flex items-center gap-1.5 text-[11px] text-amber-900 font-medium">
+                <Info size={13} className="shrink-0 text-amber-700" />
+                <span>Regional risk assessment is unavailable outside the supported area. No artificial or static score is displayed.</span>
+              </div>
+            </div>
+
+            {/* Selector to explore monitored NER locations */}
+            <div className="space-y-2.5 pt-1">
+              <div className="text-xs font-bold text-[#0F2018]">
+                Explore Monitored Catchments Across Northeast India:
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {MONITORED_NER_LOCATIONS.slice(0, 6).map((loc) => (
+                  <button
+                    key={loc.id}
+                    onClick={() => handleSelectCatchment(loc)}
+                    className="p-2.5 rounded-xl bg-[#F5F0E8] hover:bg-[#EAE2D5] border border-[#C8D8BC] text-left transition-all group cursor-pointer"
+                  >
+                    <div className="text-xs font-bold text-[#0F2018] group-hover:text-[#4A7C59]">
+                      {loc.name}
+                    </div>
+                    <div className="text-[10px] text-slate-500">{loc.state}</div>
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => setShowLocationPicker(true)}
+                className="w-full py-2.5 px-3 rounded-xl bg-white hover:bg-slate-50 border border-[#C8D8BC] text-xs font-bold text-[#4A7C59] transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <span>View All 20 Monitored Catchments →</span>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* SECTION 7: PRIMARY "YOUR CURRENT RISK" CARD */}
+            <div className={`p-5 rounded-3xl border-2 ${riskCardBorder} shadow-sm space-y-3.5 transition-all`}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black uppercase tracking-wider text-[#2C4A3E]">
+                  YOUR CURRENT RISK
+                </span>
+                <span className={`text-[11px] font-black uppercase px-3 py-1 rounded-full border ${riskBadgeColor}`}>
+                  ● {risk.level}
+                </span>
+              </div>
+
+              <div className="flex items-baseline justify-between">
+                <div className="text-3xl sm:text-4xl font-black font-mono text-[#0F2018] tracking-tight">
+                  {displayScore}
+                  <span className="text-sm text-[#2C4A3E] font-mono font-medium"> / 100</span>
+                </div>
+                <div className="text-right text-[11px] text-slate-500 font-medium">
+                  Nearest Catchment: <span className="font-bold text-[#0F2018]">{riskData.nearestCatchment?.name || 'NER Catchment'}</span>
+                </div>
+              </div>
+
+              <div>
+                <h2 className="text-base sm:text-lg font-black text-[#0F2018] leading-snug">
+                  {risk.level === 'LOW'
+                    ? 'LOW RISK: Current assessed conditions are relatively low risk.'
+                    : risk.headline}
+                </h2>
+                <p className="text-xs text-[#2C4A3E] font-medium mt-1 leading-relaxed">
+                  {risk.level === 'LOW'
+                    ? 'Current assessed conditions are relatively low risk. A low risk score does not mean zero danger; maintain situational awareness during sudden downpours.'
+                    : risk.explanation}
+                </p>
+              </div>
+
+              {/* Real-time Data Freshness Badge */}
+              <div className="pt-3 border-t border-[#C8D8BC]/60 flex items-center justify-between text-[10px] text-slate-500">
+                <div className="flex items-center gap-1.5 font-medium">
+                  <Clock size={12} className="text-[#4A7C59]" />
+                  <span>{riskData.freshnessMetadata?.rainfall || 'LIVE (Open-Meteo API) · Telemetry Synced'}</span>
+                </div>
+                <span className="font-mono font-semibold">
+                  Updated just now
+                </span>
+              </div>
+            </div>
 
         {/* SECTION 8: "WHY IS MY AREA AT RISK?" (Dynamic Factors) */}
         <div className="p-4 rounded-3xl bg-white border border-[#C8D8BC] shadow-xs space-y-3">
@@ -626,6 +712,8 @@ export function CitizenDashboard({ initialWelcome = false }: CitizenDashboardPro
             </div>
           </div>
         </div>
+      </>
+    )}
 
         {/* SECTION 22: COMMUNITY GROUND REPORTS FEED */}
         <div className="p-4 rounded-3xl bg-white border border-[#C8D8BC] shadow-xs space-y-3">

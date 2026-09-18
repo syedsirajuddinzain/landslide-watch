@@ -68,6 +68,16 @@ export function SimulationPanel({ locationId, locationName }: { locationId: stri
         </button>
       </div>
 
+      {(running || result) && (
+        <div className="p-3 rounded-xl bg-amber-500/20 border-2 border-amber-500 text-amber-300 font-bold text-xs flex items-center gap-2.5 mb-4 shadow-md animate-in fade-in">
+          <AlertTriangle size={18} className="text-amber-400 shrink-0" />
+          <div>
+            <div className="text-amber-200 font-black tracking-wide">⚠️ SIMULATION MODE ACTIVE</div>
+            <div className="text-[11px] text-amber-300/80 font-normal">What-if stress testing scenario. Synthetic values are strictly isolated from operational live telemetry.</div>
+          </div>
+        </div>
+      )}
+
       <DemoBanner />
 
       {/* Progress steps */}

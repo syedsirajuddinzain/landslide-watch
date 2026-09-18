@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { getDb, COLLECTIONS } from '../config/firebase';
 import { authenticate, AuthenticatedRequest } from '../middleware/auth';
+import { requireAuthority } from '../middleware/rbac';
 import { auditLog } from '../middleware/audit';
 import { ResponseAction, FieldVerification } from '../types';
 import { logger } from '../utils/logger';
@@ -13,7 +14,7 @@ const router = Router();
 // ==========================================
 
 // GET /api/response/actions
-router.get('/actions', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+router.get('/actions', authenticate, requireAuthority, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const db = getDb();
     const { locationId, status, priority, limit = '100' } = req.query;
@@ -36,7 +37,7 @@ router.get('/actions', authenticate, async (req: AuthenticatedRequest, res: Resp
 });
 
 // POST /api/response/actions
-router.post('/actions', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+router.post('/actions', authenticate, requireAuthority, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   if (req.user?.role === 'viewer') {
     res.status(403).json({ success: false, error: 'Insufficient permissions' });
     return;

@@ -69,21 +69,8 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* ROOT: Landing Page when unauthenticated; respective dashboard when authenticated */}
-        <Route
-          path="/"
-          element={
-            !user ? (
-              <LandingPage />
-            ) : role === 'citizen' ? (
-              <CitizenDashboard />
-            ) : (
-              <AppLayout>
-                <CommandCenter />
-              </AppLayout>
-            )
-          }
-        />
+        {/* ROOT: Dual Entry Landing Screen (ALWAYS presents clear choice: [CITIZEN] or [AUTHORITY]; never auto-enters dashboard) */}
+        <Route path="/" element={<LandingPage />} />
 
         {/* Dual Entry Routes */}
         <Route path="/landing" element={<LandingPage />} />

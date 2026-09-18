@@ -452,6 +452,19 @@ export function ResponseCenter() {
                     {report.userPhone && <span className="font-mono ml-1">({report.userPhone})</span>}
                   </div>
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setTaskLocId(report.nearestCatchmentId || 'aizawl');
+                        setTaskTitle(`Field Inspection: ${report.observationType?.replace(/_/g, ' ') || 'Hazard'} at ${report.locationName || 'Monitored Site'}`);
+                        setTaskDesc(`Citizen report #${report.id}: "${report.description || 'Ground hazard observed'}". Reported by ${report.userName || 'Citizen'}.`);
+                        setActiveTab('board');
+                        setShowNewTaskModal(true);
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs transition-colors"
+                      title="Dispatch NDRF/SDRF field team for this hazard"
+                    >
+                      Dispatch Task
+                    </button>
                     {report.status !== 'VERIFIED' && (
                       <button
                         onClick={() => updateCitizenReportMutation.mutate({ id: report.id, status: 'VERIFIED' })}

@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Navigation, Car, AlertTriangle, ShieldCheck, CheckCircle2, ArrowRight } from 'lucide-react';
-import { computeCitizenTripRisk } from '../../lib/api';
+import api, { computeCitizenTripRisk } from '../../lib/api';
 import { TripRiskAssessment } from '../../types';
 
 interface TripCheckModalProps {
@@ -37,14 +37,41 @@ export function TripCheckModal({ isOpen, onClose }: TripCheckModalProps) {
     const route = POPULAR_ROUTES[0];
     return computeCitizenTripRisk(route.origin, route.destination);
   });
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Fetch live route evaluation from backend
+  const evaluateRoute = async (index: number) => {
+    setSelectedPreset(index);
+    const route = POPULAR_ROUTES[index];
+    setIsLoading(true);
+
+    try {
+      const res = await api.post('/api/citizen/check-trip', {
+        origin: route.origin,
+        destination: route.destination,
+      });
+      if (res.data?.success && res.data?.data) {
+        setAssessment(res.data.data);
+      } else {
+        setAssessment(computeCitizenTripRisk(route.origin, route.destination));
+      }
+    } catch {
+      setAssessment(computeCitizenTripRisk(route.origin, route.destination));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      evaluateRoute(selectedPreset);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
   const handleSelectRoute = (index: number) => {
-    setSelectedPreset(index);
-    const route = POPULAR_ROUTES[index];
-    const res = computeCitizenTripRisk(route.origin, route.destination);
-    setAssessment(res);
+    evaluateRoute(index);
   };
 
   const isHigh = assessment.overallCaution === 'HIGH_ALERT';

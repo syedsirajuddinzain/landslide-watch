@@ -39,12 +39,12 @@ async function getLatestRainfall(
   const snap = await db
     .collection(COLLECTIONS.RAINFALL)
     .where('locationId', '==', locationId)
+    .orderBy('timestamp', 'desc')
+    .limit(1)
     .get();
 
   if (snap.empty) return null;
-  const docs = snap.docs.map(d => d.data() as RainfallObservation);
-  docs.sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
-  return docs[0];
+  return snap.docs[0].data() as RainfallObservation;
 }
 
 async function countHistoricalLandslides(

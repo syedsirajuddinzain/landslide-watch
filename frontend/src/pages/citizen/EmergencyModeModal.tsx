@@ -1,265 +1,116 @@
-import { useState, useEffect, useRef } from 'react';
-import {
-  AlertOctagon,
-  PhoneCall,
-  Share2,
-  Volume2,
-  VolumeX,
-  Compass,
-  Flashlight,
-  ArrowRight,
-  X,
-  ShieldAlert,
-} from 'lucide-react';
+import React from 'react';
+import { AlertOctagon, PhoneCall, Share2, Camera, Compass, X, AlertTriangle } from 'lucide-react';
 
 interface EmergencyModeModalProps {
   isOpen: boolean;
   onClose: () => void;
-  userCoordinates: { lat: number; lon: number; name?: string };
-  riskLevel: string;
+  locationName: string;
   riskScore: number;
-  nearestCatchmentName: string;
-  saferLocation?: { name: string; distanceKm: number };
+  onOpenReport: () => void;
+  onOpenSaferGround: () => void;
+  onShareLocation: () => void;
 }
 
 export function EmergencyModeModal({
   isOpen,
   onClose,
-  userCoordinates,
-  riskLevel,
+  locationName,
   riskScore,
-  nearestCatchmentName,
-  saferLocation,
+  onOpenReport,
+  onOpenSaferGround,
+  onShareLocation,
 }: EmergencyModeModalProps) {
-  const [sirenPlaying, setSirenPlaying] = useState(false);
-  const [flashlightOn, setFlashlightOn] = useState(false);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const oscillatorRef = useRef<OscillatorNode | null>(null);
-
-  // Handle Siren Sound via Web Audio API
-  const toggleSiren = () => {
-    if (sirenPlaying) {
-      // Stop siren
-      if (oscillatorRef.current) {
-        try {
-          oscillatorRef.current.stop();
-          oscillatorRef.current.disconnect();
-        } catch {}
-        oscillatorRef.current = null;
-      }
-      setSirenPlaying(false);
-    } else {
-      // Start siren
-      try {
-        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-        const ctx = new AudioCtx();
-        audioCtxRef.current = ctx;
-
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(650, ctx.currentTime);
-        // Modulate frequency like emergency siren
-        osc.frequency.linearRampToValueAtTime(950, ctx.currentTime + 0.6);
-        osc.frequency.linearRampToValueAtTime(650, ctx.currentTime + 1.2);
-
-        gain.gain.setValueAtTime(0.15, ctx.currentTime);
-
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-
-        oscillatorRef.current = osc;
-        setSirenPlaying(true);
-      } catch {
-        setSirenPlaying(false);
-      }
-    }
-  };
-
-  // Clean up audio when closing
-  useEffect(() => {
-    return () => {
-      if (oscillatorRef.current) {
-        try {
-          oscillatorRef.current.stop();
-        } catch {}
-      }
-      if (audioCtxRef.current) {
-        try {
-          audioCtxRef.current.close();
-        } catch {}
-      }
-    };
-  }, []);
-
   if (!isOpen) return null;
 
-  const handleShareDistress = () => {
-    const text = `🚨 URGENT LANDSLIDE SOS BEACON: I need emergency assistance! Location: ${userCoordinates.name || nearestCatchmentName} (GPS: ${userCoordinates.lat.toFixed(4)}°N, ${userCoordinates.lon.toFixed(4)}°E). Landslide Risk: ${riskLevel} (${riskScore}/100). Please alert local authorities / NDRF.`;
-    if (navigator.share) {
-      navigator.share({
-        title: 'URGENT LANDSLIDE SOS BEACON',
-        text,
-        url: window.location.href,
-      }).catch(() => {});
-    } else {
-      navigator.clipboard.writeText(text);
-      alert('Distress beacon message copied to clipboard!');
-    }
-  };
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/85 backdrop-blur-md animate-in fade-in font-sans">
-      <div className="bg-white rounded-3xl border-4 border-rose-600 shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[92vh]">
-        {/* Urgent Header */}
-        <div className="bg-rose-600 text-white p-4 flex items-center justify-between animate-pulse">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-rose-950/80 backdrop-blur-md animate-in fade-in">
+      <div className="bg-white rounded-3xl border-2 border-rose-500 shadow-2xl w-full max-w-md overflow-hidden relative text-[#0F2018] flex flex-col">
+        {/* Header */}
+        <div className="bg-rose-600 text-white px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-white text-rose-600 flex items-center justify-center shadow-md">
-              <AlertOctagon size={24} />
-            </div>
-            <div>
-              <div className="text-xs font-black uppercase tracking-widest text-rose-100">
-                CRITICAL EMERGENCY MODE
-              </div>
-              <div className="text-base font-black">Landslide Distress Active</div>
-            </div>
+            <span className="w-3 h-3 rounded-full bg-white animate-ping" />
+            <span className="text-xs font-black tracking-widest uppercase">Emergency Action Mode</span>
           </div>
-
           <button
-            onClick={() => {
-              if (sirenPlaying) toggleSiren();
-              onClose();
-            }}
-            className="p-2 rounded-xl bg-white/20 hover:bg-white/30 text-white transition-colors"
+            onClick={onClose}
+            className="p-1 rounded-lg text-white/80 hover:text-white hover:bg-rose-700/60 transition-colors"
           >
-            <X size={18} />
+            <X size={20} />
           </button>
         </div>
 
-        {/* Body */}
-        <div className="p-5 space-y-4 overflow-y-auto">
-          {/* Status & Coordinates */}
-          <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-black uppercase text-rose-900 flex items-center gap-1.5">
-                <ShieldAlert size={14} className="text-rose-600" />
-                <span>Assessed Threat Level</span>
-              </span>
-              <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-rose-600 text-white">
-                {riskLevel} • {riskScore.toFixed(1)}/100
-              </span>
-            </div>
-
-            <div className="text-xs text-rose-950 font-medium">
-              You are currently near <strong>{userCoordinates.name || nearestCatchmentName}</strong>.
-            </div>
-
-            <div className="flex items-center justify-between text-[11px] font-mono text-rose-800 pt-1 border-t border-rose-200/60">
-              <span>GPS: {userCoordinates.lat.toFixed(4)}°N, {userCoordinates.lon.toFixed(4)}°E</span>
-              <span>Region: Northeast India</span>
-            </div>
+        {/* Core Distress Status */}
+        <div className="p-6 text-center space-y-3 bg-rose-50/70 border-b border-rose-200">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-rose-600 text-white mx-auto shadow-lg shadow-rose-900/30">
+            <AlertOctagon size={36} />
           </div>
 
-          {/* TWO PRIMARY SOS ACTION BUTTONS */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <a
-              href="tel:112"
-              className="p-4 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transition-all text-center transform active:scale-98"
-            >
-              <PhoneCall size={18} />
-              <span>Call 112 (National SOS)</span>
-            </a>
-
-            <button
-              onClick={handleShareDistress}
-              className="p-4 rounded-2xl bg-[#0F2018] hover:bg-black text-white font-black text-sm flex items-center justify-center gap-2 shadow-md transition-all text-center"
-            >
-              <Share2 size={18} />
-              <span>Share GPS Distress Beacon</span>
-            </button>
+          <div>
+            <h2 className="text-2xl font-black text-rose-900 tracking-tight">
+              🔴 CRITICAL RISK
+            </h2>
+            <p className="text-xs text-rose-800 font-bold mt-1">
+              Your current area ({locationName}) has very high assessed landslide risk ({riskScore}/100).
+            </p>
           </div>
 
-          {/* EMERGENCY TOOLS: SIREN & FLASHLIGHT */}
-          <div className="grid grid-cols-2 gap-2.5">
-            <button
-              onClick={toggleSiren}
-              className={`p-3 rounded-2xl border font-bold text-xs flex items-center justify-center gap-2 transition-all ${
-                sirenPlaying
-                  ? 'bg-amber-500 text-white border-amber-600 shadow-md animate-bounce'
-                  : 'bg-[#FAF7F2] border-[#C8D8BC] text-[#0F2018] hover:bg-amber-50'
-              }`}
-            >
-              {sirenPlaying ? <VolumeX size={16} /> : <Volume2 size={16} />}
-              <span>{sirenPlaying ? 'Stop Siren' : '🔊 Play SOS Siren'}</span>
-            </button>
-
-            <button
-              onClick={() => setFlashlightOn(!flashlightOn)}
-              className={`p-3 rounded-2xl border font-bold text-xs flex items-center justify-center gap-2 transition-all ${
-                flashlightOn
-                  ? 'bg-yellow-400 text-black border-yellow-500 shadow-md'
-                  : 'bg-[#FAF7F2] border-[#C8D8BC] text-[#0F2018] hover:bg-yellow-50'
-              }`}
-            >
-              <Flashlight size={16} />
-              <span>{flashlightOn ? 'Flashlight Active' : '🔦 Torch Guide'}</span>
-            </button>
-          </div>
-
-          {/* NEAREST SAFER GROUND NAVIGATION */}
-          {saferLocation && (
-            <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 space-y-1.5">
-              <div className="flex items-center justify-between text-xs font-bold text-emerald-900">
-                <span>🧭 Nearest Recommended Safer Ground</span>
-                <span className="font-mono text-emerald-700">{saferLocation.distanceKm} km away</span>
-              </div>
-              <div className="text-xs font-black text-emerald-950">{saferLocation.name}</div>
-              <p className="text-[11px] text-emerald-800">
-                Move perpendicular to slope cutting towards wide flat terrace ground. Avoid staying under uncemented hillside cuts.
-              </p>
+          <div className="p-3 rounded-xl bg-white border border-rose-200 text-left text-[11px] text-rose-900 space-y-1">
+            <div className="font-bold flex items-center gap-1.5">
+              <AlertTriangle size={13} className="text-rose-600 shrink-0" />
+              <span>Safety Directive:</span>
             </div>
-          )}
-
-          {/* 3 CRITICAL EVACUATION DIRECTIVES */}
-          <div className="space-y-1.5 text-xs">
-            <div className="font-black text-[#0F2018] uppercase tracking-wider text-[11px]">
-              Immediate Survival Actions:
-            </div>
-            <ul className="space-y-1.5 text-[11px] text-[#1A3028]">
-              <li className="flex items-start gap-1.5">
-                <span className="text-rose-600 font-bold">1.</span>
-                <span>Move away from hillside escarpment cuts, natural stream ravines, and retaining walls.</span>
-              </li>
-              <li className="flex items-start gap-1.5">
-                <span className="text-rose-600 font-bold">2.</span>
-                <span>Listen for unusual rumbling sounds, falling stones, or sudden burst of muddy stream water.</span>
-              </li>
-              <li className="flex items-start gap-1.5">
-                <span className="text-rose-600 font-bold">3.</span>
-                <span>If caught in sudden debris flow, protect your head with your arms and roll into a ball.</span>
-              </li>
-            </ul>
+            <p className="leading-tight">
+              Move away from steep, saturated hillside slopes and unreinforced stone walls immediately. Stay alert for rockfall or sudden muddy water flow.
+            </p>
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="p-3 bg-[#FAF7F2] border-t border-[#C8D8BC] flex items-center justify-between text-xs">
-          <span className="text-slate-500 text-[10px]">Toll-Free National Emergency: 112</span>
+        {/* 4 PRIMARY EMERGENCY BUTTONS */}
+        <div className="p-6 space-y-3 bg-white">
+          <a
+            href="tel:112"
+            className="w-full py-3.5 px-4 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-black text-sm tracking-wide shadow-md flex items-center justify-center gap-2.5 transition-all"
+          >
+            <PhoneCall size={18} />
+            <span>📞 EMERGENCY HELP (CALL 112)</span>
+          </a>
+
+          <button
+            onClick={onShareLocation}
+            className="w-full py-3 px-4 rounded-2xl bg-white hover:bg-slate-50 border-2 border-rose-300 text-rose-900 font-bold text-xs shadow-xs flex items-center justify-center gap-2 transition-all"
+          >
+            <Share2 size={16} />
+            <span>📍 SHARE MY LOCATION</span>
+          </button>
+
           <button
             onClick={() => {
-              if (sirenPlaying) toggleSiren();
               onClose();
+              onOpenReport();
             }}
-            className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-[#0F2018] font-bold text-xs transition-colors"
+            className="w-full py-3 px-4 rounded-2xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-950 font-bold text-xs transition-all flex items-center justify-center gap-2"
           >
-            Close Emergency Mode
+            <Camera size={16} className="text-amber-700" />
+            <span>🚨 REPORT HAZARD (CAMERA EVIDENCE)</span>
           </button>
+
+          <button
+            onClick={() => {
+              onClose();
+              onOpenSaferGround();
+            }}
+            className="w-full py-3 px-4 rounded-2xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-950 font-bold text-xs transition-all flex items-center justify-center gap-2"
+          >
+            <Compass size={16} className="text-emerald-700" />
+            <span>🗺️ FIND POTENTIAL SAFER LOCATION</span>
+          </button>
+        </div>
+
+        {/* STRICT DISCLAIMER */}
+        <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-200 text-center text-[11px] text-slate-600 font-medium">
+          Follow official local emergency instructions. All evacuations must follow local District Disaster Management Authority (DDMA) protocols.
         </div>
       </div>
     </div>
   );
 }
-
-export default EmergencyModeModal;

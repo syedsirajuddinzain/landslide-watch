@@ -24,7 +24,11 @@ interface CitizenMapProps {
 function RecenterMap({ lat, lon }: { lat: number; lon: number }) {
   const map = useMap();
   useEffect(() => {
-    map.flyTo([lat, lon], 12, { duration: 1.2 });
+    if (typeof lat === 'number' && !isNaN(lat) && typeof lon === 'number' && !isNaN(lon)) {
+      try {
+        map.flyTo([lat, lon], 12, { duration: 1.2 });
+      } catch {}
+    }
   }, [lat, lon, map]);
   return null;
 }
@@ -32,12 +36,16 @@ function RecenterMap({ lat, lon }: { lat: number; lon: number }) {
 export function CitizenMap({
   userCoordinates,
   locationName,
-  riskLevel,
-  riskScore,
+  riskLevel = 'HIGH',
+  riskScore = 50,
   nearbyHazards = [],
   citizenReports = [],
   height = '320px',
 }: CitizenMapProps) {
+  const safeLat = (typeof userCoordinates?.lat === 'number' && !isNaN(userCoordinates.lat)) ? userCoordinates.lat : 23.7307;
+  const safeLon = (typeof userCoordinates?.lon === 'number' && !isNaN(userCoordinates.lon)) ? userCoordinates.lon : 92.7173;
+  const safeScore = (typeof riskScore === 'number' && !isNaN(riskScore)) ? riskScore : 50;
+
   const riskColor =
     riskLevel === 'CRITICAL'
       ? '#dc2626'
@@ -50,12 +58,12 @@ export function CitizenMap({
   return (
     <div className="relative rounded-2xl overflow-hidden border border-[#C8D8BC] shadow-sm" style={{ height }}>
       <MapContainer
-        center={[userCoordinates.lat, userCoordinates.lon]}
+        center={[safeLat, safeLon]}
         zoom={12}
         scrollWheelZoom={false}
         className="w-full h-full z-0"
       >
-        <RecenterMap lat={userCoordinates.lat} lon={userCoordinates.lon} />
+        <RecenterMap lat={safeLat} lon={safeLon} />
 
         {/* CartoDB Positron basemap */}
         <TileLayer
@@ -66,7 +74,7 @@ export function CitizenMap({
 
         {/* Catchment Surveillance Radius */}
         <Circle
-          center={[userCoordinates.lat, userCoordinates.lon]}
+          center={[safeLat, safeLon]}
           radius={3000}
           pathOptions={{
             color: riskColor,
@@ -79,7 +87,7 @@ export function CitizenMap({
 
         {/* User GPS Pin */}
         <CircleMarker
-          center={[userCoordinates.lat, userCoordinates.lon]}
+          center={[safeLat, safeLon]}
           radius={9}
           pathOptions={{
             color: '#ffffff',
@@ -91,9 +99,9 @@ export function CitizenMap({
           <Popup>
             <div className="text-xs p-1">
               <strong className="block text-[#0F2018] font-bold">Your Location</strong>
-              <div className="text-[#1A3028] mt-0.5">{locationName}</div>
+              <div className="text-[#1A3028] mt-0.5">{locationName || 'Monitored Region'}</div>
               <div className="mt-1 font-mono text-[11px] font-bold" style={{ color: riskColor }}>
-                Status: {riskLevel} ({riskScore.toFixed(1)}/100)
+                Status: {riskLevel} ({safeScore.toFixed(1)}/100)
               </div>
             </div>
           </Popup>

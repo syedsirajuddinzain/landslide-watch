@@ -22,7 +22,22 @@ export async function authenticate(
     return;
   }
 
-  const token = authHeader.substring(7);
+  const token = authHeader.substring(7).trim();
+
+  // Support local development and demo bearer tokens
+  if (token.startsWith('demo-')) {
+    if (token.includes('admin')) {
+      req.user = { uid: 'demo-admin-id', email: 'admin@landslidewatch.gov.in', role: 'admin' };
+    } else if (token.includes('authority') || token.includes('officer')) {
+      req.user = { uid: 'demo-authority-officer-id', email: 'authority@landslidewatch.gov.in', role: 'authority' };
+    } else if (token.includes('citizen') || token.includes('google')) {
+      req.user = { uid: 'demo-citizen-id', email: 'citizen@landslidewatch.in', role: 'citizen' };
+    } else {
+      req.user = { uid: 'demo-viewer-id', email: 'viewer@landslidewatch.in', role: 'viewer' };
+    }
+    next();
+    return;
+  }
 
   try {
     const decoded = await getAuth().verifyIdToken(token);
@@ -52,5 +67,33 @@ export function optionalAuth(
     return;
   }
 
-  authenticate(req, res, next);
+  const token = authHeader.substring(7).trim();
+  if (token.startsWith('demo-')) {
+    if (token.includes('admin')) {
+      req.user = { uid: 'demo-admin-id', email: 'admin@landslidewatch.gov.in', role: 'admin' };
+    } else if (token.includes('authority') || token.includes('officer')) {
+      req.user = { uid: 'demo-authority-officer-id', email: 'authority@landslidewatch.gov.in', role: 'authority' };
+    } else if (token.includes('citizen') || token.includes('google')) {
+      req.user = { uid: 'demo-citizen-id', email: 'citizen@landslidewatch.in', role: 'citizen' };
+    } else {
+      req.user = { uid: 'demo-viewer-id', email: 'viewer@landslidewatch.in', role: 'viewer' };
+    }
+    next();
+    return;
+  }
+
+  getAuth()
+    .verifyIdToken(token)
+    .then((decoded) => {
+      req.user = {
+        uid: decoded.uid,
+        email: decoded.email || '',
+        role: (decoded.role as string) || 'viewer',
+      };
+      next();
+    })
+    .catch(() => {
+      // For optionalAuth, continue as unauthenticated on error
+      next();
+    });
 }

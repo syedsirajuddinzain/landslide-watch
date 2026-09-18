@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { getDb, COLLECTIONS } from '../config/firebase';
 import { authenticate, AuthenticatedRequest } from '../middleware/auth';
+import { requireAuthority } from '../middleware/rbac';
 import { calculateRisk } from '../engine/riskEngine';
 import { checkAndGenerateAlert } from '../engine/alertEngine';
 import { getSettings } from '../engine/riskOrchestrator';
@@ -30,7 +31,7 @@ const SIMULATION_STEPS: SimStep[] = [
 ];
 
 // POST /api/simulation/run — runs the full 5-step simulation for a location
-router.post('/run', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+router.post('/run', authenticate, requireAuthority, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   if (req.user?.role === 'viewer') {
     res.status(403).json({ success: false, error: 'Insufficient permissions' });
     return;

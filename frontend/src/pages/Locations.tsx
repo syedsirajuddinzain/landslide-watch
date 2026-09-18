@@ -3,7 +3,6 @@ import { useQuery } from 'react-query';
 import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { Location, RiskAssessment, RiskLevel } from '../types';
-import { MOCK_LOCATIONS } from '../lib/mockData';
 import { RiskBadge, PriorityBadge, TrendBadge, Spinner, EmptyState } from '../components/shared/Badges';
 import { MapPin, Search, Filter } from 'lucide-react';
 import { formatDistanceToNow, parseISO } from 'date-fns';
@@ -110,8 +109,7 @@ export function Locations() {
               </thead>
               <tbody>
                 {locations.map((loc) => {
-                  const mock = MOCK_LOCATIONS.find((m) => m.id === loc.id || m.name.toLowerCase() === loc.name.toLowerCase());
-                  const risk = loc.latestRisk || mock?.latestRisk;
+                  const risk = loc.latestRisk;
                   return (
                     <tr
                       key={loc.id}

@@ -1,11 +1,11 @@
 // ===== rainfall.ts =====
 import { Router, Response } from 'express';
 import { getDb, COLLECTIONS } from '../config/firebase';
-import { authenticate, AuthenticatedRequest } from '../middleware/auth';
+import { authenticate, optionalAuth, AuthenticatedRequest } from '../middleware/auth';
 
 const rainfallRouter = Router();
 
-rainfallRouter.get('/', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+rainfallRouter.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const { locationId, limit = '100' } = req.query;
   try {
     const db = getDb();
@@ -19,7 +19,7 @@ rainfallRouter.get('/', authenticate, async (req: AuthenticatedRequest, res: Res
   }
 });
 
-rainfallRouter.get('/latest', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+rainfallRouter.get('/latest', optionalAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const db = getDb();
     const locSnap = await db.collection(COLLECTIONS.LOCATIONS).where('isActive', '==', true).get();
@@ -37,7 +37,7 @@ rainfallRouter.get('/latest', authenticate, async (req: AuthenticatedRequest, re
   }
 });
 
-rainfallRouter.get('/forecasts', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+rainfallRouter.get('/forecasts', optionalAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const { locationId } = req.query;
   try {
     const db = getDb();
@@ -58,7 +58,7 @@ export { rainfallRouter };
 // ===== terrain.ts =====
 const terrainRouter = Router();
 
-terrainRouter.get('/', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+terrainRouter.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const db = getDb();
     const snap = await db.collection(COLLECTIONS.TERRAIN).get();
@@ -68,7 +68,7 @@ terrainRouter.get('/', authenticate, async (req: AuthenticatedRequest, res: Resp
   }
 });
 
-terrainRouter.get('/:locationId', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+terrainRouter.get('/:locationId', optionalAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const db = getDb();
     const snap = await db.collection(COLLECTIONS.TERRAIN).doc(req.params.locationId).get();
@@ -84,7 +84,7 @@ export { terrainRouter };
 // ===== soil.ts =====
 const soilRouter = Router();
 
-soilRouter.get('/', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+soilRouter.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const db = getDb();
     const snap = await db.collection(COLLECTIONS.SOIL).get();
@@ -94,7 +94,7 @@ soilRouter.get('/', authenticate, async (req: AuthenticatedRequest, res: Respons
   }
 });
 
-soilRouter.get('/:locationId', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+soilRouter.get('/:locationId', optionalAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const db = getDb();
     const snap = await db.collection(COLLECTIONS.SOIL).doc(req.params.locationId).get();
@@ -110,7 +110,7 @@ export { soilRouter };
 // ===== landslides.ts =====
 const landslidesRouter = Router();
 
-landslidesRouter.get('/', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+landslidesRouter.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const { state, district, limit = '200' } = req.query;
   try {
     const db = getDb();
@@ -126,7 +126,7 @@ landslidesRouter.get('/', authenticate, async (req: AuthenticatedRequest, res: R
 });
 
 // GET /api/landslides/backtest — historical validation suite
-landslidesRouter.get('/backtest', authenticate, async (_req: AuthenticatedRequest, res: Response): Promise<void> => {
+landslidesRouter.get('/backtest', optionalAuth, async (_req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { runHistoricalBacktest } = await import('../engine/backtestingEngine');
     const result = await runHistoricalBacktest();
@@ -136,7 +136,7 @@ landslidesRouter.get('/backtest', authenticate, async (_req: AuthenticatedReques
   }
 });
 
-landslidesRouter.get('/:id', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+landslidesRouter.get('/:id', optionalAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const db = getDb();
     const snap = await db.collection(COLLECTIONS.HISTORICAL_LANDSLIDES).doc(req.params.id).get();
@@ -152,7 +152,7 @@ export { landslidesRouter };
 // ===== infrastructure.ts =====
 const infraRouter = Router();
 
-infraRouter.get('/', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+infraRouter.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const db = getDb();
     const snap = await db.collection(COLLECTIONS.INFRASTRUCTURE).get();
@@ -162,7 +162,7 @@ infraRouter.get('/', authenticate, async (req: AuthenticatedRequest, res: Respon
   }
 });
 
-infraRouter.get('/:locationId', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+infraRouter.get('/:locationId', optionalAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const db = getDb();
     const snap = await db.collection(COLLECTIONS.INFRASTRUCTURE).doc(req.params.locationId).get();
@@ -178,16 +178,14 @@ export { infraRouter };
 // ===== analytics.ts =====
 const analyticsRouter = Router();
 
-analyticsRouter.get('/risk-distribution', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+analyticsRouter.get('/risk-distribution', optionalAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const db = getDb();
     const locSnap = await db.collection(COLLECTIONS.LOCATIONS).where('isActive', '==', true).get();
     const dist = { LOW: 0, MODERATE: 0, HIGH: 0, CRITICAL: 0 };
 
     await Promise.all(locSnap.docs.map(async (d) => {
-      const rs = await db.collection(COLLECTIONS.RISK_ASSESSMENTS).where('locationId', '==', d.id).get();
-      const rDocs = rs.docs.map(x => x.data());
-      rDocs.sort((a: any, b: any) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
+      const rs = await db.collection(COLLECTIONS.RISK_ASSESSMENTS).where('locationId', '==', d.id).orderBy('timestamp', 'desc').limit(1).get();
       if (!rs.empty) dist[rs.docs[0].data().riskLevel as keyof typeof dist]++;
     }));
 
@@ -197,7 +195,7 @@ analyticsRouter.get('/risk-distribution', authenticate, async (req: Authenticate
   }
 });
 
-analyticsRouter.get('/risk-over-time/:locationId', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+analyticsRouter.get('/risk-over-time/:locationId', optionalAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const db = getDb();
     const snap = await db.collection(COLLECTIONS.RISK_ASSESSMENTS)
@@ -212,7 +210,7 @@ analyticsRouter.get('/risk-over-time/:locationId', authenticate, async (req: Aut
   }
 });
 
-analyticsRouter.get('/alert-frequency', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+analyticsRouter.get('/alert-frequency', optionalAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const db = getDb();
     const snap = await db.collection(COLLECTIONS.ALERTS).orderBy('createdAt', 'desc').limit(200).get();
@@ -229,14 +227,12 @@ analyticsRouter.get('/alert-frequency', authenticate, async (req: AuthenticatedR
   }
 });
 
-analyticsRouter.get('/rainfall-summary', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+analyticsRouter.get('/rainfall-summary', optionalAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const db = getDb();
     const locSnap = await db.collection(COLLECTIONS.LOCATIONS).where('isActive', '==', true).get();
     const data = await Promise.all(locSnap.docs.map(async (d) => {
-      const rs = await db.collection(COLLECTIONS.RAINFALL).where('locationId', '==', d.id).get();
-      const rfDocs = rs.docs.map(x => x.data());
-      rfDocs.sort((a: any, b: any) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
+      const rs = await db.collection(COLLECTIONS.RAINFALL).where('locationId', '==', d.id).orderBy('timestamp', 'desc').limit(1).get();
       if (rs.empty) return null;
       const r = rs.docs[0].data();
       return { locationId: d.id, locationName: d.data().name, current_mmph: r.current_mmph, cumulative_24h_mm: r.cumulative_24h_mm, cumulative_72h_mm: r.cumulative_72h_mm, intensity: r.intensity };
@@ -248,7 +244,7 @@ analyticsRouter.get('/rainfall-summary', authenticate, async (req: Authenticated
 });
 
 // GET /api/analytics/backtesting — historical validation results
-analyticsRouter.get('/backtesting', authenticate, async (_req: AuthenticatedRequest, res: Response): Promise<void> => {
+analyticsRouter.get('/backtesting', optionalAuth, async (_req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { runHistoricalBacktest } = await import('../engine/backtestingEngine');
     const result = await runHistoricalBacktest();
@@ -279,11 +275,10 @@ notifRouter.get('/', authenticate, async (req: AuthenticatedRequest, res: Respon
     const db = getDb();
     const snap = await db.collection(COLLECTIONS.NOTIFICATIONS)
       .where('userId', 'in', [req.user!.uid, 'all'])
+      .orderBy('createdAt', 'desc')
+      .limit(50)
       .get();
-    const notifs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    notifs.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-    const limited = notifs.slice(0, 50);
-    res.json({ success: true, data: limited });
+    res.json({ success: true, data: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
   } catch (err) {
     res.status(500).json({ success: false, error: 'Failed to fetch notifications' });
   }
@@ -320,7 +315,7 @@ export { notifRouter };
 // ===== datasources.ts =====
 const datasourcesRouter = Router();
 
-datasourcesRouter.get('/', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+datasourcesRouter.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const db = getDb();
     const snap = await db.collection(COLLECTIONS.DATA_SOURCES).get();
@@ -331,7 +326,7 @@ datasourcesRouter.get('/', authenticate, async (req: AuthenticatedRequest, res: 
 });
 
 // GET /api/datasources/health — detailed real data health telemetry
-datasourcesRouter.get('/health', authenticate, async (_req: AuthenticatedRequest, res: Response): Promise<void> => {
+datasourcesRouter.get('/health', optionalAuth, async (_req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const db = getDb();
     const [sourcesSnap, rainSnap, locSnap, lsSnap, infraSnap] = await Promise.all([

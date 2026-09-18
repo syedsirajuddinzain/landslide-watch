@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { getDb, COLLECTIONS } from '../config/firebase';
 import { authenticate, AuthenticatedRequest } from '../middleware/auth';
+import { requireAuthority } from '../middleware/rbac';
 import { updateAlertStatus } from '../engine/alertEngine';
 import { auditLog } from '../middleware/audit';
 import { Alert } from '../types';
@@ -8,7 +9,7 @@ import { Alert } from '../types';
 const router = Router();
 
 // GET /api/alerts — list alerts with filters
-router.get('/', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+router.get('/', authenticate, requireAuthority, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const db = getDb();
     const { status, locationId, riskLevel, limit = '50' } = req.query;
@@ -29,23 +30,22 @@ router.get('/', authenticate, async (req: AuthenticatedRequest, res: Response): 
 });
 
 // GET /api/alerts/active — unresolved alerts
-router.get('/active', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+router.get('/active', authenticate, requireAuthority, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const db = getDb();
     const snap = await db
       .collection(COLLECTIONS.ALERTS)
       .where('status', 'in', ['NEW', 'ACKNOWLEDGED', 'INVESTIGATING'])
+      .orderBy('createdAt', 'desc')
       .get();
-    const alerts = snap.docs.map((d) => d.data());
-    alerts.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-    res.json({ success: true, data: alerts, total: alerts.length });
+    res.json({ success: true, data: snap.docs.map((d) => d.data()), total: snap.size });
   } catch (err) {
     res.status(500).json({ success: false, error: 'Failed to fetch active alerts' });
   }
 });
 
 // GET /api/alerts/:id
-router.get('/:id', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+router.get('/:id', authenticate, requireAuthority, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const db = getDb();
     const snap = await db.collection(COLLECTIONS.ALERTS).doc(req.params.id).get();
@@ -57,7 +57,7 @@ router.get('/:id', authenticate, async (req: AuthenticatedRequest, res: Response
 });
 
 // PATCH /api/alerts/:id/acknowledge
-router.patch('/:id/acknowledge', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+router.patch('/:id/acknowledge', authenticate, requireAuthority, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   if (req.user?.role === 'viewer') { res.status(403).json({ success: false, error: 'Insufficient permissions' }); return; }
   try {
     await updateAlertStatus(req.params.id, 'ACKNOWLEDGED', req.user!.uid, req.user!.email);
@@ -69,7 +69,7 @@ router.patch('/:id/acknowledge', authenticate, async (req: AuthenticatedRequest,
 });
 
 // PATCH /api/alerts/:id/investigate
-router.patch('/:id/investigate', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+router.patch('/:id/investigate', authenticate, requireAuthority, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   if (req.user?.role === 'viewer') { res.status(403).json({ success: false, error: 'Insufficient permissions' }); return; }
   try {
     await updateAlertStatus(req.params.id, 'INVESTIGATING', req.user!.uid, req.user!.email);
@@ -81,7 +81,7 @@ router.patch('/:id/investigate', authenticate, async (req: AuthenticatedRequest,
 });
 
 // PATCH /api/alerts/:id/resolve
-router.patch('/:id/resolve', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+router.patch('/:id/resolve', authenticate, requireAuthority, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   if (req.user?.role === 'viewer') { res.status(403).json({ success: false, error: 'Insufficient permissions' }); return; }
   const { resolutionNotes } = req.body;
   try {
