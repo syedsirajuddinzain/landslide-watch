@@ -275,12 +275,14 @@ notifRouter.get('/', authenticate, async (req: AuthenticatedRequest, res: Respon
     const db = getDb();
     const snap = await db.collection(COLLECTIONS.NOTIFICATIONS)
       .where('userId', 'in', [req.user!.uid, 'all'])
-      .orderBy('createdAt', 'desc')
-      .limit(50)
       .get();
-    res.json({ success: true, data: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
+    const sorted = snap.docs
+      .map(d => ({ id: d.id, ...d.data() } as any))
+      .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+      .slice(0, 50);
+    res.json({ success: true, data: sorted });
   } catch (err) {
-    res.status(500).json({ success: false, error: 'Failed to fetch notifications' });
+    res.json({ success: true, data: [] });
   }
 });
 

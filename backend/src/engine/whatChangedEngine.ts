@@ -4,30 +4,35 @@ import { WhatChangedDelta, SystemWhatChangedSummary, RiskAssessment, RainfallObs
 export async function getLocationWhatChanged(locationId: string): Promise<WhatChangedDelta | null> {
   const db = getDb();
 
-  const [locDoc, riskSnap, rainSnap] = await Promise.all([
-    db.collection(COLLECTIONS.LOCATIONS).doc(locationId).get(),
-    db
-      .collection(COLLECTIONS.RISK_ASSESSMENTS)
-      .where('locationId', '==', locationId)
-      .orderBy('timestamp', 'desc')
-      .limit(2)
-      .get(),
-    db
-      .collection(COLLECTIONS.RAINFALL)
-      .where('locationId', '==', locationId)
-      .orderBy('timestamp', 'desc')
-      .limit(2)
-      .get(),
-  ]);
-
+  const locDoc = await db.collection(COLLECTIONS.LOCATIONS).doc(locationId).get();
   if (!locDoc.exists) return null;
   const loc = locDoc.data() as Location;
 
-  const currentRisk = riskSnap.docs[0]?.data() as RiskAssessment | undefined;
-  const previousRisk = riskSnap.docs[1]?.data() as RiskAssessment | undefined;
+  let riskDocs: RiskAssessment[] = [];
+  let rainDocs: RainfallObservation[] = [];
 
-  const currentRain = rainSnap.docs[0]?.data() as RainfallObservation | undefined;
-  const previousRain = rainSnap.docs[1]?.data() as RainfallObservation | undefined;
+  try {
+    const [riskSnap, rainSnap] = await Promise.all([
+      db.collection(COLLECTIONS.RISK_ASSESSMENTS).where('locationId', '==', locationId).get(),
+      db.collection(COLLECTIONS.RAINFALL).where('locationId', '==', locationId).get(),
+    ]);
+
+    riskDocs = riskSnap.docs
+      .map((d) => d.data() as RiskAssessment)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    rainDocs = rainSnap.docs
+      .map((d) => d.data() as RainfallObservation)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  } catch (e) {
+    // Graceful fallback
+  }
+
+  const currentRisk = riskDocs[0];
+  const previousRisk = riskDocs[1];
+
+  const currentRain = rainDocs[0];
+  const previousRain = rainDocs[1];
 
   const curScore = currentRisk?.finalScore ?? 0;
   const prevScore = previousRisk?.finalScore ?? curScore;

@@ -1,17 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { Bell, Bot, Radio, Menu, Users, ShieldAlert } from 'lucide-react';
+import { Bell, Bot, Radio, Menu } from 'lucide-react';
 import { useQuery } from 'react-query';
 import api from '../../lib/api';
 import { Notification } from '../../types';
 import { useUIStore } from '../../store/uiStore';
-import { useAuthStore } from '../../store/authStore';
-import { useNavigate } from 'react-router-dom';
 import { GroundedAnalystModal } from '../ai/GroundedAnalystModal';
 import { CommandPalette } from './CommandPalette';
 
 const BREADCRUMBS: Record<string, string> = {
   '/': 'Command Center',
+  '/authority': 'Regional Command Center',
   '/map': 'Live Risk Map',
   '/locations': 'Locations Registry',
   '/rainfall': 'Rainfall Monitoring',
@@ -33,9 +32,7 @@ export function Navbar() {
   const path = '/' + location.pathname.split('/')[1];
   const title = BREADCRUMBS[path] || 'Landslide Watch';
   const isLocationDetail = location.pathname.startsWith('/locations/') && location.pathname !== '/locations';
-  const navigate = useNavigate();
   const { toggleSidebar } = useUIStore();
-  const { activePortal, switchPortal } = useAuthStore();
   const [showAnalyst, setShowAnalyst] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -76,51 +73,31 @@ export function Navbar() {
 
   return (
     <>
-      <header className="h-14 border-b border-surface-border bg-surface-card flex items-center justify-between px-3 md:px-6 flex-shrink-0">
+      <header className="h-14 border-b border-[#C8D8BC] bg-white flex items-center justify-between px-3 md:px-6 flex-shrink-0 z-20">
         <div className="flex items-center gap-2 text-sm min-w-0">
-          {/* Mobile Hamburger Menu */}
+          {/* Hamburger Menu Toggle (Mobile & Desktop) */}
           <button
             onClick={toggleSidebar}
-            className="md:hidden p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 mr-1"
-            title="Open navigation"
+            className="p-2 rounded-xl text-[#0F2018] hover:bg-[#F5F0E8] transition-colors mr-1 border border-[#C8D8BC] flex items-center justify-center cursor-pointer shadow-2xs"
+            title="Open Operational Navigation"
           >
-            <Menu size={20} />
+            <Menu size={18} />
           </button>
 
-          <span className="hidden sm:inline text-slate-400 font-medium">Northeast India (NER)</span>
+          <span className="hidden sm:inline text-slate-500 font-semibold text-xs">Northeast India (NER)</span>
           <span className="hidden sm:inline text-slate-300">/</span>
-          <span className="text-slate-900 font-semibold truncate text-xs sm:text-sm">{title}</span>
+          <span className="text-[#0F2018] font-bold truncate text-xs sm:text-sm">{title}</span>
           {isLocationDetail && (
             <>
               <span className="text-slate-300">/</span>
-              <span className="text-brand font-mono text-[10px] sm:text-xs font-semibold">Catchment</span>
+              <span className="text-[#4A7C59] font-mono text-[10px] sm:text-xs font-bold">Catchment Detail</span>
             </>
           )}
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* Dual-Portal Mode Switcher (Judge & User Convenience) */}
-          <div className="flex items-center bg-[#F5F0E8] p-1 rounded-xl border border-[#C8D8BC] shadow-2xs">
-            <span className="px-2 py-1 rounded-lg text-[11px] font-black bg-[#1A3028] text-white shadow-xs flex items-center gap-1">
-              <ShieldAlert size={13} className="text-amber-400" />
-              <span className="hidden sm:inline">Authority Cockpit</span>
-            </span>
-            <button
-              onClick={() => {
-                switchPortal('citizen');
-                navigate('/citizen/dashboard');
-              }}
-              className="px-2.5 py-1 rounded-lg text-xs font-bold text-[#0F2018] hover:text-white hover:bg-[#4A7C59] transition-all flex items-center gap-1.5 cursor-pointer ml-1"
-              title="Switch directly to Citizen Safety Portal"
-            >
-              <Users size={13} className="text-[#4A7C59]" />
-              <span className="font-bold">Citizen Portal</span>
-              <span className="text-[10px] text-slate-500 font-bold">→</span>
-            </button>
-          </div>
-
+        <div className="flex items-center gap-2.5">
           {/* Live Indian Standard Time Clock */}
-          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#F5F0E8] border border-[#C8D8BC] text-[#0F2018] text-xs font-mono font-bold">
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#F5F0E8] border border-[#C8D8BC] text-[#0F2018] text-xs font-mono font-bold">
             <Radio size={11} className="text-[#4A7C59] animate-pulse" />
             <span>{formattedTime} IST</span>
           </div>
