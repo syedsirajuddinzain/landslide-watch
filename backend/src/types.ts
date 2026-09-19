@@ -108,6 +108,8 @@ export interface ForecastData {
   next6h_mm: number;
   next12h_mm?: number;
   next24h_mm: number;
+  next36h_mm?: number;
+  next48h_mm?: number;
   next72h_mm: number;
   qualityFlag: DataQuality;
 }
@@ -189,6 +191,8 @@ export interface FutureRiskForecast {
     plus6h: FutureRiskHorizon;
     plus12h: FutureRiskHorizon;
     plus24h: FutureRiskHorizon;
+    plus36h?: FutureRiskHorizon;
+    plus48h?: FutureRiskHorizon;
   };
   forecastConfidence: 'HIGH' | 'MODERATE' | 'LOW';
   scientificNote: string;
@@ -209,6 +213,8 @@ export interface RiskAssessment {
     forecast_6h_mm: number;
     forecast_12h_mm?: number;
     forecast_24h_mm: number;
+    forecast_36h_mm?: number;
+    forecast_48h_mm?: number;
     slope_deg: number;
     soilSusceptibility: number;
     landCoverSusceptibility: number;
@@ -229,6 +235,8 @@ export interface RiskAssessment {
     plus6h: { score: number; level: RiskLevel };
     plus12h: { score: number; level: RiskLevel };
     plus24h: { score: number; level: RiskLevel };
+    plus36h?: { score: number; level: RiskLevel };
+    plus48h?: { score: number; level: RiskLevel };
   };
   recommendations: string[];
   dataQuality: Record<string, DataQuality>;

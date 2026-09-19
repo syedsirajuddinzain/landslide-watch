@@ -445,18 +445,20 @@ export default function LocationDetails() {
             </div>
             {futureRisk && (
               <span className="text-xs px-2.5 py-1 rounded bg-blue-950 text-blue-300 border border-blue-800 font-mono">
-                Model: 24h NWP Forecast Horizon
+                Model: 48h NWP Forecast Horizon
               </span>
             )}
           </div>
 
           {futureRisk ? (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
               {[
                 { label: '+6 Hours Horizon', data: futureRisk.plus6h },
                 { label: '+12 Hours Horizon', data: futureRisk.plus12h },
                 { label: '+24 Hours Horizon', data: futureRisk.plus24h },
-              ].map(({ label, data: h }) => (
+                { label: '+36 Hours Horizon', data: futureRisk.plus36h },
+                { label: '+48 Hours Horizon', data: futureRisk.plus48h },
+              ].filter((item): item is { label: string; data: NonNullable<typeof item.data> } => Boolean(item.data)).map(({ label, data: h }) => (
                 <div key={label} className="bg-surface p-5 rounded-xl border border-surface-border space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-white">{label}</span>

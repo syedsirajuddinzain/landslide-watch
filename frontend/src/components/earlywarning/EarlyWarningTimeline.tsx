@@ -45,10 +45,11 @@ export function EarlyWarningTimeline({
   const statusLabel = earlyWarning?.statusLabel ?? 'MONITORING';
   const timeline: ForecastRiskPoint[] = earlyWarning?.timeline || [
     { horizon: 'now', hoursAhead: 0, projectedRainfall24h_mm: 25, projectedPrecipRate_mmph: 4, riskScore: currentScore, stage: 'PREPARE', isThresholdCrossed: currentScore >= 65 },
-    { horizon: '+3h', hoursAhead: 3, projectedRainfall24h_mm: 32, projectedPrecipRate_mmph: 5, riskScore: Math.min(100, currentScore + 3), stage: 'PREPARE', isThresholdCrossed: false },
     { horizon: '+6h', hoursAhead: 6, projectedRainfall24h_mm: 45, projectedPrecipRate_mmph: 8, riskScore: Math.min(100, currentScore + 8), stage: 'HIGH_RISK', isThresholdCrossed: true },
     { horizon: '+12h', hoursAhead: 12, projectedRainfall24h_mm: 52, projectedPrecipRate_mmph: 6, riskScore: Math.min(100, currentScore + 12), stage: 'HIGH_RISK', isThresholdCrossed: true },
     { horizon: '+24h', hoursAhead: 24, projectedRainfall24h_mm: 40, projectedPrecipRate_mmph: 3, riskScore: Math.min(100, currentScore + 6), stage: 'HIGH_RISK', isThresholdCrossed: true },
+    { horizon: '+36h', hoursAhead: 36, projectedRainfall24h_mm: 36, projectedPrecipRate_mmph: 2.5, riskScore: Math.min(100, currentScore + 4), stage: 'PREPARE', isThresholdCrossed: false },
+    { horizon: '+48h', hoursAhead: 48, projectedRainfall24h_mm: 30, projectedPrecipRate_mmph: 2, riskScore: Math.min(100, currentScore + 2), stage: 'PREPARE', isThresholdCrossed: false },
   ];
 
   const currentStage: RiskEscalationStage = earlyWarning?.currentStage ?? (currentScore >= 80 ? 'CRITICAL' : currentScore >= 65 ? 'HIGH_RISK' : currentScore >= 50 ? 'PREPARE' : currentScore >= 35 ? 'WATCH' : 'NORMAL');
@@ -134,7 +135,7 @@ export function EarlyWarningTimeline({
 
         {/* Metric 2: Peak Forecast Risk */}
         <div className="p-3.5 bg-[#FAF7F2] rounded-2xl border border-[#C8D8BC] space-y-1">
-          <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Forecast Peak Risk (+24h)</div>
+          <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Forecast Peak Risk (+48h)</div>
           <div className="text-2xl font-black font-mono text-blue-700">
             {peakScore.toFixed(1)} <span className="text-xs font-normal text-slate-500">/ 100</span>
           </div>
@@ -172,7 +173,7 @@ export function EarlyWarningTimeline({
               ? `~${earlyWarning.timeToThresholdHours} hours`
               : status === 'THRESHOLD_ACTIVE'
               ? 'Active Now'
-              : 'None in 24h'}
+              : 'None in 48h'}
           </div>
           <div className="flex items-center gap-1">
             <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
@@ -194,7 +195,7 @@ export function EarlyWarningTimeline({
           <div className="flex items-center gap-2">
             <TrendingUp size={15} className="text-[#4A7C59]" />
             <span className="text-xs font-black text-[#0F2018] uppercase tracking-wider">
-              Forecast-Based Risk Progression Timeline
+              Forecast-Based Risk Progression Timeline (48-Hour Lookahead)
             </span>
           </div>
           <span className="text-[11px] font-mono text-slate-500 font-medium">
@@ -202,8 +203,8 @@ export function EarlyWarningTimeline({
           </span>
         </div>
 
-        {/* Step-by-step Visual Timeline Flow */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 pt-2">
+        {/* Step-by-step Visual Timeline Flow (6 horizons: NOW, +3h, +6h, +12h, +24h, +48h) */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 pt-2">
           {timeline.map((pt, idx) => {
             const isCrossingPoint = pt.isThresholdCrossed && (idx === 0 || !timeline[idx - 1].isThresholdCrossed);
             return (
@@ -347,7 +348,7 @@ export function EarlyWarningTimeline({
           <div className="p-2.5 rounded-xl bg-white border border-[#C8D8BC] space-y-1">
             <div className="text-[10px] font-bold text-blue-700 uppercase">2. How will it change?</div>
             <p className="text-[11px] text-[#1A3028] font-medium leading-relaxed">
-              Projects risk at +3h, +6h, +12h, and +24h horizons by running Open-Meteo rainfall forecasts through the geotechnical formula.
+              Projects risk at +3h, +6h, +12h, +24h, and +48h horizons by running Open-Meteo rainfall forecasts through the geotechnical formula.
             </p>
           </div>
           <div className="p-2.5 rounded-xl bg-white border border-[#C8D8BC] space-y-1">

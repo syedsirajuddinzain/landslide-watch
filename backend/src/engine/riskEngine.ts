@@ -35,6 +35,8 @@ export interface RiskInputs {
   forecast_6h_mm: number;
   forecast_12h_mm?: number;
   forecast_24h_mm: number;
+  forecast_36h_mm?: number;
+  forecast_48h_mm?: number;
   // Terrain
   slope_deg: number;
   // Soil
@@ -359,6 +361,8 @@ export function calculateFutureRisk(
   const rainNext6h = forecast?.next6h_mm ?? (hourly.slice(0, 6).reduce((s, h) => s + h.precipitation_mm, 0) || inputs.forecast_6h_mm);
   const rainNext12h = forecast?.next12h_mm ?? (hourly.slice(0, 12).reduce((s, h) => s + h.precipitation_mm, 0) || (inputs.forecast_6h_mm + (inputs.forecast_24h_mm - inputs.forecast_6h_mm) * 0.4));
   const rainNext24h = forecast?.next24h_mm ?? (hourly.slice(0, 24).reduce((s, h) => s + h.precipitation_mm, 0) || inputs.forecast_24h_mm);
+  const rainNext36h = (forecast as any)?.next36h_mm ?? (hourly.slice(0, 36).reduce((s, h) => s + h.precipitation_mm, 0) || (rainNext24h + (rainNext24h * 0.4)));
+  const rainNext48h = (forecast as any)?.next48h_mm ?? (hourly.slice(0, 48).reduce((s, h) => s + h.precipitation_mm, 0) || (rainNext24h * 1.6));
 
   const currentImpact = calculateImpactScore(
     inputs.population,
@@ -396,10 +400,17 @@ export function calculateFutureRisk(
     if (compScores.slope > 0.6) primaryDrivers.push(`Steep terrain (${inputs.slope_deg.toFixed(1)}°)`);
     if (compScores.soil > 0.6) primaryDrivers.push(`High soil moisture susceptibility (${(inputs.soilSusceptibility * 100).toFixed(0)}%)`);
 
+    const precipForHorizon =
+      horizonHours === 6 ? rainNext6h :
+      horizonHours === 12 ? rainNext12h :
+      horizonHours === 24 ? rainNext24h :
+      horizonHours === 36 ? rainNext36h :
+      rainNext48h;
+
     return {
       horizonHours,
       label,
-      forecastPrecipitation_mm: Math.round(horizonHours === 6 ? rainNext6h : horizonHours === 12 ? rainNext12h : rainNext24h * 10) / 10,
+      forecastPrecipitation_mm: Math.round(precipForHorizon * 10) / 10,
       estimatedHazardScore: hazardScore,
       estimatedFinalScore: finalScore,
       estimatedRiskLevel,
@@ -411,6 +422,8 @@ export function calculateFutureRisk(
   const plus6h = evaluateHorizon(6, '+6 Hours', inputs.rainfall_24h_mm * 0.8 + rainNext6h, inputs.rainfall_72h_mm + rainNext6h, Math.max(0, rainNext24h - rainNext6h));
   const plus12h = evaluateHorizon(12, '+12 Hours', inputs.rainfall_24h_mm * 0.6 + rainNext12h, inputs.rainfall_72h_mm + rainNext12h, Math.max(0, rainNext24h - rainNext12h));
   const plus24h = evaluateHorizon(24, '+24 Hours', rainNext24h, inputs.rainfall_72h_mm * 0.6 + rainNext24h, Math.max(0, inputs.forecast_24h_mm * 0.8));
+  const plus36h = evaluateHorizon(36, '+36 Hours', inputs.rainfall_24h_mm * 0.2 + (rainNext36h - rainNext12h), inputs.rainfall_72h_mm * 0.4 + rainNext36h, Math.max(0, rainNext48h - rainNext36h));
+  const plus48h = evaluateHorizon(48, '+48 Hours', rainNext48h - rainNext24h, inputs.rainfall_72h_mm * 0.2 + rainNext48h, Math.max(0, (rainNext48h - rainNext24h) * 0.5));
 
   // Current score for comparison
   const currentRainScore = normalizeRainfall(inputs.rainfall_current_mmph, inputs.rainfall_24h_mm, inputs.rainfall_72h_mm, inputs.forecast_6h_mm, inputs.forecast_24h_mm);
@@ -435,8 +448,10 @@ export function calculateFutureRisk(
       plus6h,
       plus12h,
       plus24h,
+      plus36h,
+      plus48h,
     },
-    forecastConfidence: hourly.length >= 24 ? 'HIGH' : 'MODERATE',
+    forecastConfidence: hourly.length >= 48 ? 'HIGH' : hourly.length >= 24 ? 'MODERATE' : 'LOW',
     scientificNote: 'Future risk is estimated using numerical weather prediction from Open-Meteo and configured static geotechnical parameters. These values are decision-support projections and do not constitute deterministic landslide forecasts.',
   };
 }
@@ -530,6 +545,8 @@ export function calculateRisk(
       plus6h: { score: futureRisk.horizons.plus6h.estimatedFinalScore, level: futureRisk.horizons.plus6h.estimatedRiskLevel },
       plus12h: { score: futureRisk.horizons.plus12h.estimatedFinalScore, level: futureRisk.horizons.plus12h.estimatedRiskLevel },
       plus24h: { score: futureRisk.horizons.plus24h.estimatedFinalScore, level: futureRisk.horizons.plus24h.estimatedRiskLevel },
+      plus36h: futureRisk.horizons.plus36h ? { score: futureRisk.horizons.plus36h.estimatedFinalScore, level: futureRisk.horizons.plus36h.estimatedRiskLevel } : undefined,
+      plus48h: futureRisk.horizons.plus48h ? { score: futureRisk.horizons.plus48h.estimatedFinalScore, level: futureRisk.horizons.plus48h.estimatedRiskLevel } : undefined,
     },
     recommendations,
     dataQuality: inputs.dataQuality,

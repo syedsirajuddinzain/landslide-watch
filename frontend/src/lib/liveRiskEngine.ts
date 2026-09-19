@@ -440,7 +440,10 @@ export interface LiveWeatherData {
   rainfall_24h_mm: number;
   rainfall_72h_mm: number;
   forecast_6h_mm: number;
+  forecast_12h_mm?: number;
   forecast_24h_mm: number;
+  forecast_36h_mm?: number;
+  forecast_48h_mm?: number;
   weather_code: number;
   timestamp: string;
   source: string;
@@ -468,7 +471,7 @@ export async function fetchLiveWeather(lat: number, lon: number, locationId: str
         current: 'precipitation,rain,weather_code',
         hourly: 'precipitation',
         timezone: 'Asia/Kolkata',
-        forecast_days: 2,
+        forecast_days: 3,
       },
       timeout: 7000,
     });
@@ -488,10 +491,15 @@ export async function fetchLiveWeather(lat: number, lon: number, locationId: str
       sum24h += Number(hourlyPrecip[i] || 0);
     }
 
-    // Short-term numerical forecast
+    // Short-term numerical forecasts (6h, 12h, 24h, 36h, 48h)
     let fc6h = 0;
     for (let i = currentHourIndex; i < currentHourIndex + 6 && i < hourlyPrecip.length; i++) {
       fc6h += Number(hourlyPrecip[i] || 0);
+    }
+
+    let fc12h = 0;
+    for (let i = currentHourIndex; i < currentHourIndex + 12 && i < hourlyPrecip.length; i++) {
+      fc12h += Number(hourlyPrecip[i] || 0);
     }
 
     let fc24h = 0;
@@ -499,12 +507,25 @@ export async function fetchLiveWeather(lat: number, lon: number, locationId: str
       fc24h += Number(hourlyPrecip[i] || 0);
     }
 
+    let fc36h = 0;
+    for (let i = currentHourIndex; i < currentHourIndex + 36 && i < hourlyPrecip.length; i++) {
+      fc36h += Number(hourlyPrecip[i] || 0);
+    }
+
+    let fc48h = 0;
+    for (let i = currentHourIndex; i < currentHourIndex + 48 && i < hourlyPrecip.length; i++) {
+      fc48h += Number(hourlyPrecip[i] || 0);
+    }
+
     const liveData: LiveWeatherData = {
       current_mmph: Math.round(currentPrecip * 10) / 10,
       rainfall_24h_mm: Math.round(sum24h * 10) / 10,
       rainfall_72h_mm: Math.round((sum24h * 1.8) * 10) / 10,
       forecast_6h_mm: Math.round(fc6h * 10) / 10,
+      forecast_12h_mm: Math.round(fc12h * 10) / 10,
       forecast_24h_mm: Math.round(fc24h * 10) / 10,
+      forecast_36h_mm: Math.round(fc36h * 10) / 10,
+      forecast_48h_mm: Math.round(fc48h * 10) / 10,
       weather_code: weatherCode,
       timestamp: res.data?.current?.time ? new Date(res.data.current.time).toISOString() : new Date().toISOString(),
       source: 'Open-Meteo AWS Telemetry (NWP)',
@@ -535,7 +556,10 @@ export async function fetchLiveWeather(lat: number, lon: number, locationId: str
       rainfall_24h_mm: 0.0,
       rainfall_72h_mm: 0.0,
       forecast_6h_mm: 0.0,
+      forecast_12h_mm: 0.0,
       forecast_24h_mm: 0.0,
+      forecast_36h_mm: 0.0,
+      forecast_48h_mm: 0.0,
       weather_code: 0,
       timestamp: new Date().toISOString(),
       source: 'Sensor Ingestion Pending (Initial Connect)',
@@ -641,17 +665,15 @@ export function calculateForecastRiskTimeline(
 
   const currentStage = determineEscalationStage(currentScore);
 
-  // Derive forecast precipitation values at +3h, +6h, +12h, +24h
+  // Derive forecast precipitation values at +6h, +12h, +24h, +36h, +48h
   const fc6 = weather.forecast_6h_mm || 0;
+  const fc12 = weather.forecast_12h_mm || (fc6 + (weather.forecast_24h_mm - fc6) * 0.5);
   const fc24 = weather.forecast_24h_mm || 0;
+  const fc48 = weather.forecast_48h_mm || (fc24 * 1.5);
+  const fc36 = weather.forecast_36h_mm || (fc24 + (fc48 - fc24) * 0.5);
   const base24 = weather.rainfall_24h_mm || 0;
 
-  // Forecast Horizons
-  // +3h
-  const rain24_3h = Math.round((base24 * 0.90 + fc6 * 0.45) * 10) / 10;
-  const rate_3h = Math.round((fc6 / 6) * 10) / 10;
-  const score_3h = evaluateScoreAtPoint(rate_3h, rain24_3h, weather.rainfall_72h_mm + fc6 * 0.45, Math.max(0, fc24 - fc6 * 0.45));
-
+  // Forecast Horizons (Now -> +6h -> +12h -> +24h -> +36h -> +48h)
   // +6h
   const rain24_6h = Math.round((base24 * 0.80 + fc6) * 10) / 10;
   const rate_6h = Math.round((fc6 / 6) * 10) / 10;
@@ -659,14 +681,26 @@ export function calculateForecastRiskTimeline(
 
   // +12h
   const remFc = Math.max(0, fc24 - fc6);
-  const rain24_12h = Math.round((base24 * 0.60 + fc6 + remFc * 0.5) * 10) / 10;
+  const rain24_12h = Math.round((base24 * 0.60 + fc12) * 10) / 10;
   const rate_12h = Math.round((remFc / 18) * 10) / 10;
-  const score_12h = evaluateScoreAtPoint(rate_12h, rain24_12h, weather.rainfall_72h_mm + fc6 + remFc * 0.5, remFc * 0.5);
+  const score_12h = evaluateScoreAtPoint(rate_12h, rain24_12h, weather.rainfall_72h_mm + fc12, Math.max(0, fc24 - fc12));
 
   // +24h
   const rain24_24h = Math.round((base24 * 0.30 + fc24) * 10) / 10;
   const rate_24h = Math.round((fc24 / 24) * 10) / 10;
   const score_24h = evaluateScoreAtPoint(rate_24h, rain24_24h, weather.rainfall_72h_mm + fc24, Math.max(0, fc24 * 0.6));
+
+  // +36h
+  const periodRain36 = Math.max(0, fc36 - fc12);
+  const rain24_36h = Math.round((base24 * 0.15 + periodRain36) * 10) / 10;
+  const rate_36h = Math.round(((fc36 - fc24) / 12) * 10) / 10;
+  const score_36h = evaluateScoreAtPoint(rate_36h, rain24_36h, weather.rainfall_72h_mm + fc36, Math.max(0, fc48 - fc36));
+
+  // +48h
+  const day2Precip = Math.max(0, fc48 - fc24);
+  const rain24_48h = Math.round((day2Precip * 0.85 + base24 * 0.15) * 10) / 10;
+  const rate_48h = Math.round((day2Precip / 24) * 10) / 10;
+  const score_48h = evaluateScoreAtPoint(rate_48h, rain24_48h, weather.rainfall_72h_mm + fc48, Math.max(0, day2Precip * 0.5));
 
   const timeline: ForecastRiskPoint[] = [
     {
@@ -677,15 +711,6 @@ export function calculateForecastRiskTimeline(
       riskScore: currentScore,
       stage: currentStage,
       isThresholdCrossed: currentScore >= 65,
-    },
-    {
-      horizon: '+3h',
-      hoursAhead: 3,
-      projectedRainfall24h_mm: rain24_3h,
-      projectedPrecipRate_mmph: rate_3h,
-      riskScore: score_3h,
-      stage: determineEscalationStage(score_3h),
-      isThresholdCrossed: score_3h >= 65,
     },
     {
       horizon: '+6h',
@@ -714,6 +739,24 @@ export function calculateForecastRiskTimeline(
       stage: determineEscalationStage(score_24h),
       isThresholdCrossed: score_24h >= 65,
     },
+    {
+      horizon: '+36h',
+      hoursAhead: 36,
+      projectedRainfall24h_mm: rain24_36h,
+      projectedPrecipRate_mmph: rate_36h,
+      riskScore: score_36h,
+      stage: determineEscalationStage(score_36h),
+      isThresholdCrossed: score_36h >= 65,
+    },
+    {
+      horizon: '+48h',
+      hoursAhead: 48,
+      projectedRainfall24h_mm: rain24_48h,
+      projectedPrecipRate_mmph: rate_48h,
+      riskScore: score_48h,
+      stage: determineEscalationStage(score_48h),
+      isThresholdCrossed: score_48h >= 65,
+    },
   ];
 
   const peakPoint = [...timeline.slice(1)].sort((a, b) => b.riskScore - a.riskScore)[0];
@@ -723,7 +766,7 @@ export function calculateForecastRiskTimeline(
   const HIGH_THRESHOLD = 65;
   let thresholdCrossed = false;
   let timeToThresholdHours: number | null = null;
-  let timeToThresholdLabel = 'Projected to remain below threshold';
+  let timeToThresholdLabel = 'Projected to remain below threshold over next 48h';
   let status: 'RISK_ESCALATING' | 'STABLE' | 'DE_ESCALATING' | 'THRESHOLD_ACTIVE' = 'STABLE';
   let statusLabel = 'STABLE';
   let message = '';
@@ -753,12 +796,12 @@ export function calculateForecastRiskTimeline(
       status = 'DE_ESCALATING';
       statusLabel = 'DE-ESCALATING';
       timeToThresholdLabel = 'Projected to remain below threshold';
-      message = `Atmospheric drying trend detected. Slope moisture saturation is stabilizing over the next 24 hours.`;
+      message = `Atmospheric drying trend detected. Slope moisture saturation is stabilizing over the next 48 hours.`;
     } else {
       status = 'STABLE';
       statusLabel = 'MONITORING';
-      timeToThresholdLabel = 'Projected to remain below threshold';
-      message = `Environmental and meteorological conditions are forecast to remain stable within current operational bounds.`;
+      timeToThresholdLabel = 'Projected to remain below threshold over next 48h';
+      message = `Environmental and meteorological conditions are forecast to remain stable within current operational bounds over the 48-hour forecast window.`;
     }
   }
 

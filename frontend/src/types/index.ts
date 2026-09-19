@@ -32,6 +32,8 @@ export interface FutureRiskForecast {
   plus6h: FutureRiskHorizon;
   plus12h: FutureRiskHorizon;
   plus24h: FutureRiskHorizon;
+  plus36h?: FutureRiskHorizon;
+  plus48h?: FutureRiskHorizon;
 }
 
 export interface RiskAssessment {
@@ -363,7 +365,7 @@ export interface PotentialSaferLocation {
 export type RiskEscalationStage = 'NORMAL' | 'WATCH' | 'PREPARE' | 'HIGH_RISK' | 'CRITICAL';
 
 export interface ForecastRiskPoint {
-  horizon: 'now' | '+3h' | '+6h' | '+12h' | '+24h';
+  horizon: 'now' | '+6h' | '+12h' | '+24h' | '+36h' | '+48h' | '+3h';
   hoursAhead: number;
   projectedRainfall24h_mm: number;
   projectedPrecipRate_mmph: number;

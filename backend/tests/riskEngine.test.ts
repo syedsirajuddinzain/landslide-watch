@@ -310,8 +310,11 @@ describe('Risk Engine — Threshold Boundaries', () => {
     expect(result.futureProjections?.plus6h).toBeDefined();
     expect(result.futureProjections?.plus12h).toBeDefined();
     expect(result.futureProjections?.plus24h).toBeDefined();
+    expect(result.futureProjections?.plus36h).toBeDefined();
+    expect(result.futureProjections?.plus48h).toBeDefined();
     expect(result.futureProjections!.plus6h.score).toBeGreaterThanOrEqual(0);
     expect(result.futureProjections!.plus24h.score).toBeLessThanOrEqual(100);
+    expect(result.futureProjections!.plus48h!.score).toBeLessThanOrEqual(100);
   });
 });
 

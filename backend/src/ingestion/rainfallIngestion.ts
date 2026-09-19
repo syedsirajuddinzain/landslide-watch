@@ -115,7 +115,10 @@ export async function fetchRainfallForLocation(location: Location): Promise<{
       }));
 
     const next6h_mm = forecastHours.slice(0, 6).reduce((s, h) => s + h.precipitation_mm, 0);
+    const next12h_mm = forecastHours.slice(0, 12).reduce((s, h) => s + h.precipitation_mm, 0);
     const next24h_mm = forecastHours.slice(0, 24).reduce((s, h) => s + h.precipitation_mm, 0);
+    const next36h_mm = forecastHours.slice(0, 36).reduce((s, h) => s + h.precipitation_mm, 0);
+    const next48h_mm = forecastHours.slice(0, 48).reduce((s, h) => s + h.precipitation_mm, 0);
     const next72h_mm = forecastHours.slice(0, 72).reduce((s, h) => s + h.precipitation_mm, 0);
 
     const forecast: ForecastData = {
@@ -124,7 +127,10 @@ export async function fetchRainfallForLocation(location: Location): Promise<{
       source: 'Open-Meteo',
       hourly: forecastHours,
       next6h_mm: Math.round(next6h_mm * 10) / 10,
+      next12h_mm: Math.round(next12h_mm * 10) / 10,
       next24h_mm: Math.round(next24h_mm * 10) / 10,
+      next36h_mm: Math.round(next36h_mm * 10) / 10,
+      next48h_mm: Math.round(next48h_mm * 10) / 10,
       next72h_mm: Math.round(next72h_mm * 10) / 10,
       qualityFlag: 'GOOD' as DataQuality,
     };
