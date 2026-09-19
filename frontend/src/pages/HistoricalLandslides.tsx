@@ -417,7 +417,13 @@ export function HistoricalLandslides() {
                             {ev.date}
                           </td>
                           <td className="px-4 py-3 font-semibold text-slate-900">
-                            {ev.locationName}, <span className="text-slate-500 text-xs font-normal">{ev.district}</span>
+                            <div>{ev.locationName}</div>
+                            <div className="text-slate-500 text-xs font-normal">{ev.district}, {ev.state}</div>
+                            {ev.notes && (
+                              <div className="text-[11px] text-[#4A7C59] mt-0.5 font-medium leading-tight">
+                                {ev.notes}
+                              </div>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-right font-mono font-bold text-blue-600">
                             {ev.historicalRainfall24h_mm.toFixed(1)} mm
@@ -439,8 +445,16 @@ export function HistoricalLandslides() {
                               </span>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-right font-mono font-bold text-blue-700">
-                            {ev.leadTimeHoursEstimated ? `~${ev.leadTimeHoursEstimated}h` : '—'}
+                          <td className="px-4 py-3 text-right">
+                            {ev.leadTimeHoursEstimated ? (
+                              <span className="font-mono font-black text-blue-700 text-xs bg-blue-50 px-2 py-1 rounded border border-blue-200">
+                                ~{ev.leadTimeHoursEstimated} hours lead time
+                              </span>
+                            ) : (
+                              <span className="text-amber-800 text-[10px] font-semibold italic bg-amber-50 px-2 py-1 rounded border border-amber-200 block text-center">
+                                Insufficient historical data to calculate validated lead time
+                              </span>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-xs font-mono text-slate-600">
                             <span className="px-2 py-0.5 rounded text-[11px] bg-emerald-50 text-emerald-800 border border-emerald-200 font-semibold">

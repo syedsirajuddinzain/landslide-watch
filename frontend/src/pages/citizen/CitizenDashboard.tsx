@@ -528,6 +528,48 @@ export function CitizenDashboard({ initialWelcome = false }: CitizenDashboardPro
               </div>
             </div>
 
+        {/* CITIZEN EARLY WARNING & UPCOMING CONDITIONS ADVISORY */}
+        {riskData?.forecastNotice?.isEscalating ? (
+          <div className="p-4 rounded-3xl bg-amber-50/90 border-2 border-amber-300 shadow-xs space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
+                <AlertTriangle size={15} className="text-amber-700" />
+                {riskData.forecastNotice.headline || 'Conditions May Worsen'}
+              </span>
+              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-200/80 text-amber-950 border border-amber-300">
+                FORECAST ADVISORY
+              </span>
+            </div>
+
+            <p className="text-xs text-[#0F2018] font-medium leading-relaxed">
+              {riskData.forecastNotice.description}
+            </p>
+
+            <div className="pt-2 border-t border-amber-200 space-y-1.5">
+              <div className="text-[11px] font-bold text-[#0F2018] uppercase tracking-wider">
+                Recommended Resident Precautions:
+              </div>
+              <ul className="space-y-1.5 text-xs text-[#1A3028]">
+                {(riskData.forecastNotice.guidance || []).map((tip: string, idx: number) => (
+                  <li key={idx} className="flex items-start gap-2">
+                    <span className="text-amber-700 font-bold">•</span>
+                    <span>{tip}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        ) : (
+          <div className="p-3 rounded-2xl bg-white border border-[#C8D8BC] flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span className="font-bold text-[#0F2018]">Upcoming Conditions:</span>
+              <span className="text-slate-600">Rainfall forecast indicates stable conditions over the coming hours.</span>
+            </div>
+            <span className="text-[10px] text-slate-400 font-mono">Open-Meteo NWP</span>
+          </div>
+        )}
+
         {/* SECTION 8: "WHY IS MY AREA AT RISK?" (Dynamic Factors) */}
         <div className="p-4 rounded-3xl bg-white border border-[#C8D8BC] shadow-xs space-y-3">
           <div className="flex items-center justify-between">

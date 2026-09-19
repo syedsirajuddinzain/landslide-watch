@@ -2,8 +2,9 @@ import { useQuery } from 'react-query';
 import api from '../lib/api';
 import { StatCard, RiskBadge } from '../components/shared/Badges';
 import { RiskDistributionChart } from '../components/charts/Charts';
-import { BarChart3, TrendingUp, AlertOctagon, Activity, CloudRain, ShieldAlert, ArrowUpRight, ArrowDownRight, Compass } from 'lucide-react';
+import { BarChart3, TrendingUp, AlertOctagon, Activity, CloudRain, ShieldAlert, ArrowUpRight, ArrowDownRight, Compass, Clock, CheckCircle2, Info } from 'lucide-react';
 import { SystemWhatChangedSummary } from '../types';
+import { calculateHistoricalLeadTimeAnalytics } from '../lib/liveRiskEngine';
 
 export function RiskAnalytics() {
   const { data: locations = [] } = useQuery('locations', () =>
@@ -102,6 +103,8 @@ export function RiskAnalytics() {
     };
   })();
 
+  const leadTimeSummary = calculateHistoricalLeadTimeAnalytics();
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -178,6 +181,82 @@ export function RiskAnalytics() {
               <div className="text-2xl font-black text-[#2D6A4F] mt-1">{fallbackAlertFreq.byStatus.resolved}</div>
               <div className="text-[11px] text-[#1A3028] mt-0.5">Pore pressure normalized</div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* LEAD-TIME ANALYTICS (Forensic Historical Backtesting) */}
+      <div className="card space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#C8D8BC]">
+          <div className="flex items-center gap-2">
+            <Clock size={20} className="text-[#4A7C59]" />
+            <h2 className="text-sm font-bold text-[#0F2018] uppercase tracking-wider">
+              Lead-Time Analytics & Early Warning Verification
+            </h2>
+            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#C8D8BC]/50 text-[#0F2018] border border-[#7FB99A]">
+              HISTORICAL BACKTEST
+            </span>
+          </div>
+          <span className="text-xs text-slate-500 font-medium">
+            Forensic analysis of documented historical disasters in Northeast India
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+          <div className="p-3 bg-[#F5F0E8] rounded-xl border border-[#C8D8BC] text-center">
+            <div className="text-[10px] text-slate-500 font-bold uppercase">Events Evaluated</div>
+            <div className="text-xl font-black font-mono text-[#0F2018] mt-1">{leadTimeSummary.eventsEvaluated}</div>
+            <div className="text-[10px] text-slate-500">GSI Disaster Archive</div>
+          </div>
+
+          <div className="p-3 bg-[#F5F0E8] rounded-xl border border-[#C8D8BC] text-center">
+            <div className="text-[10px] text-slate-500 font-bold uppercase">Threshold Crossings</div>
+            <div className="text-xl font-black font-mono text-emerald-700 mt-1">{leadTimeSummary.thresholdCrossings}</div>
+            <div className="text-[10px] text-slate-500">Pre-failure flags</div>
+          </div>
+
+          <div className="p-3 bg-blue-50/70 rounded-xl border border-blue-200 text-center">
+            <div className="text-[10px] text-blue-900 font-bold uppercase">Median Lead Time</div>
+            <div className="text-xl font-black font-mono text-blue-700 mt-1">
+              {leadTimeSummary.medianLeadTimeHours !== null ? `${leadTimeSummary.medianLeadTimeHours}h` : 'Awaiting Data'}
+            </div>
+            <div className="text-[10px] text-blue-800">Advance warning</div>
+          </div>
+
+          <div className="p-3 bg-[#F5F0E8] rounded-xl border border-[#C8D8BC] text-center">
+            <div className="text-[10px] text-slate-500 font-bold uppercase">Minimum Lead Time</div>
+            <div className="text-xl font-black font-mono text-[#0F2018] mt-1">
+              {leadTimeSummary.minLeadTimeHours !== null ? `${leadTimeSummary.minLeadTimeHours}h` : '—'}
+            </div>
+            <div className="text-[10px] text-slate-500">Fastest surge (Chungthang)</div>
+          </div>
+
+          <div className="p-3 bg-[#F5F0E8] rounded-xl border border-[#C8D8BC] text-center">
+            <div className="text-[10px] text-slate-500 font-bold uppercase">Maximum Lead Time</div>
+            <div className="text-xl font-black font-mono text-[#0F2018] mt-1">
+              {leadTimeSummary.maxLeadTimeHours !== null ? `${leadTimeSummary.maxLeadTimeHours}h` : '—'}
+            </div>
+            <div className="text-[10px] text-slate-500">Prolonged monsoon (Tupul)</div>
+          </div>
+
+          <div className="p-3 bg-[#F5F0E8] rounded-xl border border-[#C8D8BC] text-center">
+            <div className="text-[10px] text-slate-500 font-bold uppercase">Missed Events</div>
+            <div className="text-xl font-black font-mono text-emerald-700 mt-1">{leadTimeSummary.missedEvents}</div>
+            <div className="text-[10px] text-slate-500">Rapid-onset failures</div>
+          </div>
+
+          <div className="p-3 bg-[#F5F0E8] rounded-xl border border-[#C8D8BC] text-center">
+            <div className="text-[10px] text-slate-500 font-bold uppercase">False Warnings</div>
+            <div className="text-xl font-black font-mono text-emerald-700 mt-1">{leadTimeSummary.falseWarnings}</div>
+            <div className="text-[10px] text-slate-500">Zero false sirens</div>
+          </div>
+        </div>
+
+        <div className="p-3 bg-[#F5F0E8]/80 rounded-xl border border-[#C8D8BC] text-xs text-[#1A3028] flex items-start gap-2.5">
+          <Info size={16} className="text-[#4A7C59] shrink-0 mt-0.5" />
+          <div className="leading-relaxed">
+            <span className="font-bold text-[#0F2018]">Scientific Backtesting Constraint: </span>
+            {leadTimeSummary.dataLimitationsNotice}
           </div>
         </div>
       </div>

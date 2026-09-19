@@ -26,6 +26,7 @@ import {
   Search,
   Users,
 } from 'lucide-react';
+import { EarlyWarningTimeline } from '../components/earlywarning/EarlyWarningTimeline';
 import { MOCK_LOCATIONS } from '../lib/mockData';
 
 export default function CommandCenter() {
@@ -314,6 +315,9 @@ export default function CommandCenter() {
           )}
         </div>
       </div>
+
+      {/* Prominent Early Warning Window & Risk Escalation Timeline */}
+      <EarlyWarningTimeline locations={locations} />
 
       {/* Main Strategic Cockpit Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

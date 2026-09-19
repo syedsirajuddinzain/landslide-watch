@@ -51,6 +51,7 @@ export interface RiskAssessment {
   explanation: Array<{ factor: string; value: string; contribution: number; label: 'HIGH' | 'MODERATE' | 'LOW'; detailDescription?: string; }>;
   recommendations: string[];
   futureProjections?: FutureRiskForecast;
+  earlyWarning?: EarlyWarningWindow;
   dataQuality: Record<string, DataQuality>;
   isDemo: boolean;
 }
@@ -354,4 +355,55 @@ export interface PotentialSaferLocation {
   directionsNote: string;
   officialDisclaimer: string;
 }
+
+// ----------------------------------------------------
+// DATA-DRIVEN EARLY WARNING & RISK ESCALATION TYPES
+// ----------------------------------------------------
+
+export type RiskEscalationStage = 'NORMAL' | 'WATCH' | 'PREPARE' | 'HIGH_RISK' | 'CRITICAL';
+
+export interface ForecastRiskPoint {
+  horizon: 'now' | '+3h' | '+6h' | '+12h' | '+24h';
+  hoursAhead: number;
+  projectedRainfall24h_mm: number;
+  projectedPrecipRate_mmph: number;
+  riskScore: number;
+  stage: RiskEscalationStage;
+  isThresholdCrossed: boolean;
+}
+
+export interface EarlyWarningWindow {
+  locationId: string;
+  locationName: string;
+  district: string;
+  state: string;
+  currentRisk: number;
+  currentStage: RiskEscalationStage;
+  forecastPeakRisk: number;
+  forecastPeakStage: RiskEscalationStage;
+  threshold: number; // 65 for High Risk
+  thresholdCrossed: boolean;
+  timeToThresholdHours: number | null; // e.g. 6 if crossed in 6 hours
+  timeToThresholdLabel: string; // e.g. "approximately 6 hours"
+  status: 'RISK_ESCALATING' | 'STABLE' | 'DE_ESCALATING' | 'THRESHOLD_ACTIVE';
+  statusLabel: string;
+  message: string;
+  timeline: ForecastRiskPoint[];
+  authorityActionProtocols: string[];
+  citizenGuidance: string[];
+  evaluationTimestamp: string;
+}
+
+export interface LeadTimeAnalyticsSummary {
+  eventsEvaluated: number;
+  thresholdCrossings: number;
+  medianLeadTimeHours: number | null;
+  minLeadTimeHours: number | null;
+  maxLeadTimeHours: number | null;
+  missedEvents: number;
+  falseWarnings: number;
+  dataSourceStatus: string;
+  dataLimitationsNotice: string;
+}
+
 
