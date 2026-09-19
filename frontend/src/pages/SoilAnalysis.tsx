@@ -27,11 +27,11 @@ export function SoilAnalysis() {
     <div className="p-6 space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2">
-            <FlaskConical size={20} className="text-yellow-400" />
+          <h1 className="text-xl font-black text-[#0F2018] flex items-center gap-2">
+            <FlaskConical size={22} className="text-[#4A7C59]" />
             Soil & Geotechnical Analysis
           </h1>
-          <p className="text-slate-400 text-xs mt-1">
+          <p className="text-[#1A3028] text-xs font-medium mt-1">
             Geotechnical properties from ISRIC SoilGrids v2.0 (250m resolution) — Clay, Sand, Silt, Bulk Density, Water Retention
           </p>
         </div>
@@ -44,28 +44,30 @@ export function SoilAnalysis() {
         <StatCard label="Database Provider" value="ISRIC SoilGrids" accent="#10b981" sub="Global Gridded Soil Information" />
       </div>
 
-      <div className="card p-4 bg-surface/60 border border-surface-border">
+      <div className="card p-4 bg-white border border-[#C8D8BC]">
         <div className="flex items-start gap-3">
-          <Info size={18} className="text-yellow-400 shrink-0 mt-0.5" />
-          <div className="text-xs text-slate-300 leading-relaxed">
-            <strong className="text-white">Geotechnical Impact on Slope Stability:</strong> High clay and silt proportions increase soil water retention and lower the effective friction angle. During prolonged rainfall, elevated pore-water pressure along shear planes causes sudden loss of shear strength, triggering rapid rotational and translational slope failures.
+          <Info size={18} className="text-[#4A7C59] shrink-0 mt-0.5" />
+          <div className="text-xs text-[#1A3028] leading-relaxed">
+            <strong className="text-[#0F2018]">Geotechnical Impact on Slope Stability:</strong> High clay and silt proportions increase soil water retention and lower the effective friction angle. During prolonged rainfall, elevated pore-water pressure along shear planes causes sudden loss of shear strength, triggering rapid rotational and translational slope failures.
           </div>
         </div>
       </div>
 
       {isLoading ? (
-        <Spinner />
+        <div className="flex justify-center py-12">
+          <Spinner size={28} />
+        </div>
       ) : (
-        <div className="card p-0 overflow-hidden">
-          <div className="px-5 py-3 border-b border-surface-border bg-surface flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+        <div className="card p-0 overflow-hidden bg-white">
+          <div className="px-5 py-3 border-b border-[#C8D8BC] bg-[#F5F0E8]/70 flex items-center justify-between">
+            <span className="text-xs font-bold text-[#0F2018] uppercase tracking-wider">
               Regional Geotechnical Soil Registry ({soils.length} Sites)
             </span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-surface/70">
-                <tr className="text-xs text-slate-400 border-b border-surface-border">
+              <thead className="bg-[#F5F0E8]/70">
+                <tr className="text-xs font-bold text-[#1A3028] border-b border-[#C8D8BC]">
                   <th className="text-left px-4 py-3 font-medium">Location</th>
                   <th className="text-left px-4 py-3 font-medium">State</th>
                   <th className="text-left px-4 py-3 font-medium">Soil Class</th>

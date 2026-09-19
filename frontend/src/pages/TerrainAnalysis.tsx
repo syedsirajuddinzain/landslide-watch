@@ -27,12 +27,12 @@ export function TerrainAnalysis() {
     <div className="p-6 space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2">
-            <Mountain size={20} className="text-orange-400" />
+          <h1 className="text-xl font-black text-[#0F2018] flex items-center gap-2">
+            <Mountain size={22} className="text-[#4A7C59]" />
             Terrain & Slope Gradient Analysis
           </h1>
-          <p className="text-slate-400 text-xs mt-1">
-            Topographic slope angles and SRTM 90m Digital Elevation Models via OpenTopoData API
+          <p className="text-[#1A3028] text-xs font-medium mt-1">
+            Topographic slope angles, elevation gradients, and NASA SRTM 30m Digital Elevation Models across Northeast India
           </p>
         </div>
       </div>
@@ -44,78 +44,80 @@ export function TerrainAnalysis() {
         <StatCard label="Elevation Model" value="SRTMGL1" accent="#a855f7" sub="NASA/USGS 30-90m DEM" />
       </div>
 
-      <div className="card p-4">
-        <div className="flex items-center gap-2 mb-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-          <Layers size={14} className="text-brand-light" /> Slope Angle Hazard Classification Scale (Varnes 1984 / BIS 14496)
+      <div className="card p-4 bg-white">
+        <div className="flex items-center gap-2 mb-3 text-xs font-bold text-[#1A3028] uppercase tracking-wider">
+          <Layers size={15} className="text-[#4A7C59]" /> Slope Angle Hazard Classification Scale (Varnes 1984 / BIS 14496)
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-          <div className="p-3 bg-surface rounded-lg border border-surface-border">
-            <div className="text-green-400 font-bold">&lt; 10° (Gentle)</div>
-            <div className="text-slate-400 mt-1">Minimal gravitational shear stress. Low landslide initiation hazard.</div>
+          <div className="p-3 bg-[#F5F0E8]/60 rounded-xl border border-[#C8D8BC]">
+            <div className="text-emerald-700 font-bold">&lt; 10° (Gentle)</div>
+            <div className="text-[#1A3028] mt-1 text-xs">Minimal gravitational shear stress. Low landslide initiation hazard.</div>
           </div>
-          <div className="p-3 bg-surface rounded-lg border border-surface-border">
-            <div className="text-yellow-400 font-bold">10° – 20° (Moderate)</div>
-            <div className="text-slate-400 mt-1">Vulnerable during prolonged antecedent rainfall saturation.</div>
+          <div className="p-3 bg-[#F5F0E8]/60 rounded-xl border border-[#C8D8BC]">
+            <div className="text-amber-700 font-bold">10° – 20° (Moderate)</div>
+            <div className="text-[#1A3028] mt-1 text-xs">Vulnerable during prolonged antecedent rainfall saturation.</div>
           </div>
-          <div className="p-3 bg-surface rounded-lg border border-surface-border">
-            <div className="text-orange-400 font-bold">20° – 30° (Steep)</div>
-            <div className="text-slate-400 mt-1">High susceptibility. Primary landslide initiation zone in NER hill tracts.</div>
+          <div className="p-3 bg-[#F5F0E8]/60 rounded-xl border border-[#C8D8BC]">
+            <div className="text-orange-700 font-bold">20° – 30° (Steep)</div>
+            <div className="text-[#1A3028] mt-1 text-xs">High susceptibility. Primary landslide initiation zone in NER hill tracts.</div>
           </div>
-          <div className="p-3 bg-surface rounded-lg border border-surface-border">
-            <div className="text-red-400 font-bold">&gt; 30° (Very Steep / Escarpment)</div>
-            <div className="text-slate-400 mt-1">Critical threshold. Rapid rockfalls, debris flows, and planar translational slides.</div>
+          <div className="p-3 bg-[#F5F0E8]/60 rounded-xl border border-[#C8D8BC]">
+            <div className="text-rose-700 font-bold">&gt; 30° (Critical Escarpment)</div>
+            <div className="text-[#1A3028] mt-1 text-xs">Critical threshold. Rapid rockfalls, debris flows, and planar slope failures.</div>
           </div>
         </div>
       </div>
 
       {isLoading ? (
-        <Spinner />
+        <div className="flex justify-center py-12">
+          <Spinner size={28} />
+        </div>
       ) : (
-        <div className="card p-0 overflow-hidden">
-          <div className="px-5 py-3 border-b border-surface-border bg-surface flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Topographic Slope Registry ({terrain.length} Locations)
+        <div className="card p-0 overflow-hidden bg-white">
+          <div className="px-5 py-3 border-b border-[#C8D8BC] bg-[#F5F0E8]/70 flex items-center justify-between">
+            <span className="text-xs font-bold text-[#0F2018] uppercase tracking-wider">
+              Topographic Slope Registry ({terrain.length} Monitored Catchments)
             </span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-surface/70">
-                <tr className="text-xs text-slate-400 border-b border-surface-border">
-                  <th className="text-left px-4 py-3 font-medium">Location</th>
-                  <th className="text-left px-4 py-3 font-medium">District & State</th>
-                  <th className="text-right px-4 py-3 font-medium">Elevation</th>
-                  <th className="text-right px-4 py-3 font-medium">Avg Slope</th>
-                  <th className="text-right px-4 py-3 font-medium">Max Slope</th>
-                  <th className="text-left px-4 py-3 font-medium">Susceptibility Index</th>
-                  <th className="text-left px-4 py-3 font-medium">DEM Source</th>
-                  <th className="text-center px-4 py-3 font-medium">Quality</th>
+              <thead className="bg-[#F5F0E8]/70">
+                <tr className="text-xs font-bold text-[#1A3028] border-b border-[#C8D8BC]">
+                  <th className="text-left px-4 py-3 font-semibold">Catchment</th>
+                  <th className="text-left px-4 py-3 font-semibold">District & State</th>
+                  <th className="text-right px-4 py-3 font-semibold">Elevation</th>
+                  <th className="text-right px-4 py-3 font-semibold">Avg Slope</th>
+                  <th className="text-right px-4 py-3 font-semibold">Max Slope</th>
+                  <th className="text-left px-4 py-3 font-semibold">Susceptibility Index</th>
+                  <th className="text-left px-4 py-3 font-semibold">DEM Source</th>
+                  <th className="text-center px-4 py-3 font-semibold">Quality</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-[#C8D8BC]/60">
                 {terrain
                   .sort((a: any, b: any) => (b.avgSlope_deg || 0) - (a.avgSlope_deg || 0))
                   .map((t: any) => {
                     const avgSlope = t.avgSlope_deg || 0;
                     const slopeColor =
                       avgSlope >= 30
-                        ? 'text-red-600 font-bold'
+                        ? 'text-red-700 font-bold'
                         : avgSlope >= 20
-                        ? 'text-orange-600 font-bold'
+                        ? 'text-orange-700 font-bold'
                         : avgSlope >= 10
-                        ? 'text-amber-600 font-semibold'
-                        : 'text-emerald-600 font-semibold';
+                        ? 'text-amber-700 font-semibold'
+                        : 'text-emerald-700 font-semibold';
 
                     return (
-                      <tr key={t.locationId} className="table-row">
-                        <td className="px-4 py-3 font-semibold text-slate-900">
+                      <tr key={t.locationId} className="hover:bg-[#F5F0E8]/50 transition-colors">
+                        <td className="px-4 py-3 font-semibold text-[#0F2018]">
                           <Link
                             to={`/locations/${t.locationId}`}
-                            className="hover:text-blue-600 transition-colors"
+                            className="hover:text-[#4A7C59] transition-colors"
                           >
                             {t.location?.name || t.locationId}
                           </Link>
                         </td>
-                        <td className="px-4 py-3 text-slate-600 text-xs">
+                        <td className="px-4 py-3 text-[#1A3028] text-xs">
                           {t.location?.district}, {t.location?.state}
                         </td>
                         <td className="px-4 py-3 text-right font-mono font-bold text-slate-900">
